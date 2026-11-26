@@ -38,6 +38,19 @@ export function decideOutcome(
   return { outcome: rule.outcome, delayMs };
 }
 
-export function createSimulatedGateway(_delays: GatewayDelays): PaymentGateway {
-  throw new Error("não implementado");
+/**
+ * Gateway simulado: grava o desfecho e o horário da resposta em `gateway_charges`, na transação da compra.
+ * O número do cartão só é usado para decidir; não é gravado.
+ */
+export function createSimulatedGateway(delays: GatewayDelays): PaymentGateway {
+  return {
+    async charge(client, request) {
+      const { outcome, delayMs } = decideOutcome(request.cardNumber, delays);
+      await client.query("INSERT INTO gateway_charges (ticket_id, outcome, respond_at) VALUES ($1, $2, $3)", [
+        request.ticketId,
+        outcome,
+        new Date(Date.now() + delayMs),
+      ]);
+    },
+  };
 }
