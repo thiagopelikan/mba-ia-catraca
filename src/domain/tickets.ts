@@ -1,6 +1,6 @@
 import { withTransaction, type Db, type DbClient } from "../db/pool";
 import type { PaymentGateway } from "../gateway/gateway";
-import { newId, newTicketCode } from "./ids";
+import { isIdOf, newId, newTicketCode } from "./ids";
 
 export type TicketStatus = "pending" | "confirmed" | "declined" | "cancelled" | "refunded";
 export type SalesChannel = "storefront" | "partner";
@@ -186,6 +186,8 @@ function attemptPurchase(db: Db, gateway: PaymentGateway, input: PurchaseInput):
  */
 export async function purchaseTicket(db: Db, gateway: PaymentGateway, input: PurchaseInput): Promise<PurchaseResult> {
   if (!isValidCardNumber(input.cardNumber)) return { ok: false, error: "invalid_card" };
+  // ID mal formado (vindo da URL) nem chega ao banco: é evento inexistente.
+  if (!isIdOf("evt", input.eventId)) return { ok: false, error: "event_not_available" };
 
   for (let attempt = 1; ; attempt++) {
     try {
@@ -214,7 +216,9 @@ export async function applyGatewayResult(
   return result.rowCount === 1;
 }
 
+/** `null` se não existe. ID mal formado (vindo da URL) nem chega ao banco. */
 export async function getTicketById(db: Db, ticketId: string): Promise<TicketRecord | null> {
+  if (!isIdOf("tkt", ticketId)) return null;
   const { rows } = await db.query<TicketRow>(`SELECT ${COLUMNS} FROM tickets WHERE id = $1`, [ticketId]);
   return rows[0] ? toRecord(rows[0]) : null;
 }
