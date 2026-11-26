@@ -46,6 +46,26 @@ async function waitFor(condition: () => boolean | Promise<boolean>, timeoutMs = 
 }
 
 describe("pool: conexão perdida não derruba o processo", () => {
+  it("o tamanho do pool é configurável (o worker do gateway usa um pool próprio, pequeno)", async () => {
+    const small = createPool(undefined, { max: 2 });
+    const standard = createPool();
+    try {
+      expect(small.options.max).toBe(2);
+      expect(standard.options.max).toBe(20);
+      // Conexões próprias: com o outro pool inteiro ocupado, este continua atendendo.
+      const held = [await small.connect(), await small.connect()];
+      try {
+        const { rows } = await standard.query<{ ok: number }>("SELECT 1 AS ok");
+        expect(rows[0]!.ok).toBe(1);
+      } finally {
+        for (const client of held) client.release();
+      }
+    } finally {
+      await small.end();
+      await standard.end();
+    }
+  });
+
   it("o pool tem tratador do evento error, que registra uma linha e segue", async () => {
     const pool = createPool();
     try {

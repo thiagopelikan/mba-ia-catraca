@@ -3,7 +3,8 @@ import { withTransaction, type Db } from "../db/pool";
 import { applyGatewayResult } from "../domain/tickets";
 
 const DEFAULT_INTERVAL_MS = 250;
-const DEFAULT_CONCURRENCY = 4;
+/** Entregadores simultâneos por rodada. Quem inicia o worker dá a ele um pool com pelo menos esse tanto. */
+export const DEFAULT_CONCURRENCY = 4;
 const OUTAGE_LOG_INTERVAL_MS = 5000;
 
 /**
@@ -41,7 +42,10 @@ function deliverNext(db: Db, now: Date): Promise<boolean> {
  *
  * Roda `concurrency` entregadores ao mesmo tempo (padrão 4). Cada um repete `deliverNext` — uma resposta por
  * transação, nunca um lote — até não haver mais nada; o `FOR UPDATE SKIP LOCKED` garante que dois entregadores
- * nunca pegam a mesma resposta. Em série, uma rajada de compras fazia a fila de entrega atrasar.
+ * nunca pegam a mesma resposta.
+ *
+ * Cada entrega pede uma conexão ao pool. Em produção o worker recebe um pool só dele (ver `server.ts`): no pool
+ * das requisições, cada pedido entrava na fila atrás das compras em espera e a entrega atrasava durante uma rajada.
  */
 export async function deliverDueCharges(
   db: Db,

@@ -11,8 +11,12 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function createPool(connectionString: string = config.databaseUrl): Db {
-  const pool = new pg.Pool({ connectionString, max: 20, connectionTimeoutMillis: CONNECTION_TIMEOUT_MS });
+export function createPool(connectionString: string = config.databaseUrl, options: { max?: number } = {}): Db {
+  const pool = new pg.Pool({
+    connectionString,
+    max: options.max ?? 20,
+    connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
+  });
   // Uma conexão ociosa que cai (banco reiniciado ou parado) emite `error` no pool. Sem tratador, o Node encerra o
   // processo. O `pg` já descartou essa conexão; a próxima consulta abre outra.
   pool.on("error", (error) => {
