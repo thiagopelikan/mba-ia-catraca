@@ -17,6 +17,8 @@ services:
 
   app:
     build: .
+    # Defesa em profundidade: se o processo cair, o Docker o reinicia. `npm run down` continua removendo tudo.
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgres://catraca:catraca@db:5432/catraca
       PORT: "3000"
