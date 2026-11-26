@@ -14,6 +14,7 @@ export const EVENT_ERROR_MESSAGES: Record<UpdateEventError, string> = {
   invalid_price: "O preço precisa ser maior que zero",
   not_found: "Evento não encontrado",
   not_editable: "Evento cancelado não pode ser editado",
+  capacity_below_occupied: "A lotação não pode ser menor que as vagas ocupadas",
 };
 
 export const NOT_PUBLISHABLE_MESSAGE = "Este evento não pode ser publicado";
@@ -65,6 +66,11 @@ export function eventFormValues(event: EventRecord): EventFormValues {
   };
 }
 
-export function eventErrorMessages(errors: UpdateEventError[]): string[] {
-  return errors.map((error) => EVENT_ERROR_MESSAGES[error]);
+/** `occupied` (vagas ocupadas do evento) completa a mensagem do piso de lotação: `… vagas ocupadas (N)`. */
+export function eventErrorMessages(errors: UpdateEventError[], occupied?: number): string[] {
+  return errors.map((error) =>
+    error === "capacity_below_occupied" && occupied !== undefined
+      ? `${EVENT_ERROR_MESSAGES[error]} (${occupied})`
+      : EVENT_ERROR_MESSAGES[error],
+  );
 }

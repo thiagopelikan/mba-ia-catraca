@@ -1,0 +1,21 @@
+<%- include('../partials/head', { title }) %>
+<h1>Meus ingressos</h1>
+<% if (tickets.length === 0) { %>
+<p>Você ainda não tem ingressos</p>
+<% } else { %>
+<table>
+  <thead><tr><th>Evento</th><th>Data</th><th>Status</th><th>Código</th><th>Valor pago</th></tr></thead>
+  <tbody>
+  <% for (const ticket of tickets) { %>
+    <tr data-ticket-id="<%= ticket.id %>" data-ticket-code="<%= ticket.code %>" data-status="<%= ticket.status %>">
+      <td><%= ticket.eventName %></td>
+      <td><%= ticket.eventStartsAtLabel %></td>
+      <td><%= ticket.statusLabel %></td>
+      <td><%= ticket.code %></td>
+      <td><%= ticket.pricePaidLabel %></td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+<% } %>
+<%- include('../partials/foot') %>

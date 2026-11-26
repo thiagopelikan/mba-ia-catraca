@@ -4,7 +4,7 @@
 <p>Nenhum evento à venda no momento.</p>
 <% } else { %>
 <table>
-  <thead><tr><th>Evento</th><th>Data</th><th>Local</th><th>Preço</th></tr></thead>
+  <thead><tr><th>Evento</th><th>Data</th><th>Local</th><th>Preço</th><th>Ingressos</th></tr></thead>
   <tbody>
   <% for (const event of events) { %>
     <tr>
@@ -12,6 +12,7 @@
       <td><%= event.startsAtLabel %></td>
       <td><%= event.venue %></td>
       <td><%= event.priceLabel %></td>
+      <td><% if (event.available === 0) { %>Ingressos esgotados<% } else { %>Vagas disponíveis: <%= event.available %><% } %></td>
     </tr>
   <% } %>
   </tbody>

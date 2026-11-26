@@ -1,5 +1,6 @@
 import { withTransaction, type Db, type DbClient } from "../db/pool";
 import { newId } from "./ids";
+import { getSeatCounts } from "./tickets";
 
 export type EventStatus = "draft" | "published" | "cancelled";
 
@@ -36,7 +37,7 @@ export type EventValidationError =
 
 export type CreateEventResult = { ok: true; event: EventRecord } | { ok: false; errors: EventValidationError[] };
 
-export type UpdateEventError = EventValidationError | "not_found" | "not_editable";
+export type UpdateEventError = EventValidationError | "not_found" | "not_editable" | "capacity_below_occupied";
 export type UpdateEventResult = { ok: true; event: EventRecord } | { ok: false; errors: UpdateEventError[] };
 
 export type PublishEventResult =
@@ -150,6 +151,11 @@ export async function updateEvent(
 
     const errors = validateEventInput(input, now);
     if (errors.length > 0) return { ok: false, errors };
+
+    // R03: a lotação nunca fica abaixo das vagas ocupadas. A linha do evento está travada, então nenhuma
+    // compra consegue passar entre esta contagem e a gravação da nova lotação.
+    const seats = await getSeatCounts(client, eventId);
+    if (seats && input.capacity! < seats.occupied) return { ok: false, errors: ["capacity_below_occupied"] };
 
     const { rows } = await client.query<EventRow>(
       `UPDATE events SET name = $2, starts_at = $3, venue = $4, capacity = $5, price_cents = $6

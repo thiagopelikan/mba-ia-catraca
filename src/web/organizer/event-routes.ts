@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { createEvent, publishEvent, updateEvent } from "../../domain/events";
+import { getSeatCounts } from "../../domain/tickets";
 import { requireOrganizer } from "../auth/guards";
 import { EMPTY_EVENT_FORM, eventErrorMessages, NOT_PUBLISHABLE_MESSAGE, parseEventForm } from "./event-form";
 import { loadOwnedEvent, renderEventNotFound, renderManagementPage } from "./management-page";
@@ -38,7 +39,10 @@ export async function registerOrganizerEventRoutes(app: FastifyInstance): Promis
     if (result.ok) return reply.redirect(`/organizador/eventos/${event.id}`, 302);
     if (result.errors.includes("not_found")) return renderEventNotFound(reply);
 
-    const errors = eventErrorMessages(result.errors);
+    const occupied = result.errors.includes("capacity_below_occupied")
+      ? (await getSeatCounts(app.db, event.id))?.occupied
+      : undefined;
+    const errors = eventErrorMessages(result.errors, occupied);
     if (result.errors.includes("not_editable")) {
       return renderManagementPage(request, reply, event, { status: 409, errors });
     }
