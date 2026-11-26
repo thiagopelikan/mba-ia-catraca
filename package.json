@@ -8,6 +8,7 @@
     "up": "sh scripts/up.sh",
     "down": "sh scripts/down.sh",
     "gates": "sh scripts/gates.sh",
+    "flow": "bash scripts/evaluator-flow.sh",
     "start": "tsx src/server.ts",
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/db/seed.ts",
