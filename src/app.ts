@@ -9,6 +9,8 @@ import { config as defaultConfig, type Config } from "./config";
 import type { Db } from "./db/pool";
 import type { PaymentGateway } from "./gateway/gateway";
 import { createSimulatedGateway } from "./gateway/simulated";
+import { partnerApiFrameworkErrors } from "./partner-api/framework-errors";
+import { registerPartnerApiRoutes } from "./partner-api/routes";
 import { registerAuth } from "./web/auth/plugin";
 import { registerAuthRoutes } from "./web/auth/routes";
 import { registerCheckinRoutes } from "./web/organizer/checkin-routes";
@@ -40,9 +42,10 @@ const VIEWS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "web",
  * Cada feature registra as próprias rotas em um arquivo próprio e acrescenta UMA linha aqui.
  */
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
-  app.decorate("db", deps.db);
   const config = deps.config ?? defaultConfig;
+  // `frameworkErrors`: erros do roteador sob /api/partner saem no formato da API (F04); o resto fica como era.
+  const app = Fastify({ logger: false, frameworkErrors: partnerApiFrameworkErrors(config) });
+  app.decorate("db", deps.db);
   app.decorate("config", config);
   // O worker que entrega as respostas do gateway é iniciado em `server.ts`, não aqui.
   app.decorate("gateway", deps.gateway ?? createSimulatedGateway(config.gateway));
@@ -65,6 +68,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await registerOrganizerRoutes(app);
   await registerOrganizerEventRoutes(app);
   await registerParticipantRoutes(app);
+  await registerPartnerApiRoutes(app);
   await registerCheckinRoutes(app);
 
   return app;

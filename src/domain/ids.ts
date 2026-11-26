@@ -19,3 +19,18 @@ export function newId(prefix: "usr" | "evt" | "tkt" | "ses"): string {
 export function newTicketCode(): string {
   return random(CODE, 8);
 }
+
+const ID_PATTERNS = {
+  usr: /^usr_[a-z0-9]{12}$/,
+  evt: /^evt_[a-z0-9]{12}$/,
+  tkt: /^tkt_[a-z0-9]{12}$/,
+  ses: /^ses_[a-z0-9]{12}$/,
+};
+
+/**
+ * `true` se `value` tem o formato de um ID gerado por `newId`. Um ID fora do formato (vindo de uma URL) não existe:
+ * quem consulta trata como inexistente sem ir ao banco (um byte NUL, por exemplo, faz o Postgres recusar a consulta).
+ */
+export function isIdOf(prefix: keyof typeof ID_PATTERNS, value: unknown): boolean {
+  return typeof value === "string" && ID_PATTERNS[prefix].test(value);
+}

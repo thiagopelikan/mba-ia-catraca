@@ -44,17 +44,17 @@
       "name": "API de parceiros",
       "dir": "docs/features/F04-api-de-parceiros",
       "wave": "W4",
-      "status": "in_progress",
-      "pr": null,
-      "latestEvaluation": null
+      "status": "done",
+      "pr": "https://github.com/thiagopelikan/mba-ia-catraca/pull/5",
+      "latestEvaluation": "docs/features/F04-api-de-parceiros/evaluations/eval-02.md"
     },
     {
       "id": "F05",
       "name": "Check-in",
       "dir": "docs/features/F05-check-in",
       "wave": "W4",
-      "status": "in_progress",
-      "pr": null,
+      "status": "in_evaluation",
+      "pr": "https://github.com/thiagopelikan/mba-ia-catraca/pull/4",
       "latestEvaluation": null
     },
     {
@@ -63,7 +63,7 @@
       "dir": "docs/features/F06-cancelamento",
       "wave": "W4",
       "status": "in_progress",
-      "pr": null,
+      "pr": "https://github.com/thiagopelikan/mba-ia-catraca/pull/6",
       "latestEvaluation": null
     },
     {
