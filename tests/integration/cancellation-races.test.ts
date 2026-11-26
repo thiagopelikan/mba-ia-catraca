@@ -251,19 +251,29 @@ describe("corridas do cancelamento (R11)", () => {
         expect(seeded.ok, `rodada ${round}: compra prévia ${i}`).toBe(true);
       }
 
-      // Os check-ins saem um atrás do outro, espaçados por uma ida ao banco (sem `sleep`), e o cancelamento entra
-      // no meio da fila, em um ponto diferente a cada rodada: há check-ins antes, durante e depois dele.
-      const cancelAt = (round * 5) % CHECKINS;
+      // Duas frentes de check-in ao mesmo tempo que o cancelamento e o worker:
+      //  - uma fila (um check-in por vez), em que o cancelamento entra em um ponto diferente a cada rodada — os
+      //    check-ins seguintes da fila disputam a linha do evento com ele e podem chegar antes ou depois;
+      //  - uma rajada, disparada junto com o cancelamento, segurando a trava compartilhada do evento em paralelo.
+      const half = CHECKINS / 2;
+      const cancelAt = round % (half - 1);
       const checkIn = (code: string) => checkInTicket(db, { eventId: event.id, code });
-      const pendingCheckIns: Promise<Awaited<ReturnType<typeof checkInTicket>>>[] = [];
-      let cancellation: ReturnType<typeof cancelEvent> | undefined;
+      type Outcome = Awaited<ReturnType<typeof checkInTicket>>;
       const deliveries = [deliverDueCharges(db, future()), deliverDueCharges(db, future())];
-      for (let i = 0; i < CHECKINS; i++) {
-        if (i === cancelAt) cancellation = cancelEvent(db, organizerId, event.id);
-        pendingCheckIns.push(checkIn(confirmed[i]!.code));
-        await db.query("SELECT 1");
+      let cancellation: ReturnType<typeof cancelEvent> | undefined;
+      let burst: Promise<Outcome[]> | undefined;
+      const queued: Outcome[] = [];
+      for (let i = 0; i < half; i++) {
+        if (i === cancelAt) {
+          cancellation = cancelEvent(db, organizerId, event.id);
+          burst = Promise.all(confirmed.slice(half).map((ticket) => checkIn(ticket.code)));
+          cancellation.catch(() => undefined);
+          burst.catch(() => undefined);
+        }
+        queued.push(await checkIn(confirmed[i]!.code));
       }
-      const [cancelResult, outcomes] = await Promise.all([cancellation!, Promise.all(pendingCheckIns), ...deliveries]);
+      const [cancelResult, burstOutcomes] = await Promise.all([cancellation!, burst!, ...deliveries]);
+      const outcomes = [...queued, ...burstOutcomes];
 
       expect(cancelResult.ok, `rodada ${round}: cancelamento`).toBe(true);
       for (const outcome of outcomes) seen.add(outcome);
