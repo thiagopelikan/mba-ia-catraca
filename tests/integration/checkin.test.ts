@@ -60,6 +60,14 @@ describe("checkInTicket", () => {
     expect(await checkInTicket(db, { eventId: event.id, code: "   " })).toBe("invalid_ticket");
   });
 
+  it.each(["AB\u0000CD", "ab cd", "<b>x</b>", "É1234567"])(
+    "código fora do formato de um código de ingresso (%j) → invalid_ticket, sem erro",
+    async (code) => {
+      const event = await createTestEvent(db, organizerId);
+      expect(await checkInTicket(db, { eventId: event.id, code })).toBe("invalid_ticket");
+    },
+  );
+
   it("evento inexistente → invalid_ticket, sem marcar o ingresso", async () => {
     const event = await createTestEvent(db, organizerId);
     const ticket = await createTestTicket(db, event.id);

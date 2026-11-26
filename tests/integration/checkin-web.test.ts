@@ -141,6 +141,17 @@ describe("POST /organizador/eventos/:id/check-in", () => {
     expect(missing.body).toContain(result("invalid_ticket", "Ingresso inválido para este evento"));
   });
 
+  it("código com byte NUL: 200 com Ingresso inválido para este evento (não 500)", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: `/organizador/eventos/${event.id}/check-in`,
+      headers: { cookie: cookieA, "content-type": "application/x-www-form-urlencoded" },
+      payload: "code=AB%00CD",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain(result("invalid_ticket", "Ingresso inválido para este evento"));
+  });
+
   it("evento cancelado: Evento cancelado para ingresso do evento, sem registrar entrada", async () => {
     const cancelled = await createTestEvent(db, orgAId, { status: "cancelled" });
     const ticket = await createTestTicket(db, cancelled.id);

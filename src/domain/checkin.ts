@@ -24,6 +24,9 @@ export function normalizeTicketCode(raw: string): string {
  */
 export async function checkInTicket(db: Db, input: { eventId: string; code: string }): Promise<CheckInOutcome> {
   const code = normalizeTicketCode(input.code);
+  // Código de ingresso só tem letras maiúsculas e dígitos. Fora disso (vazio, byte NUL, …) não é ingresso de evento
+  // algum e nem chega ao banco: um byte NUL, por exemplo, faz o Postgres recusar a consulta.
+  if (!/^[A-Z0-9]+$/.test(code)) return "invalid_ticket";
 
   return withTransaction(db, async (client) => {
     // Trava compartilhada: check-ins do mesmo evento não se bloqueiam, mas ficam em fila com o cancelamento.
