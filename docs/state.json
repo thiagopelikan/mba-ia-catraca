@@ -26,16 +26,16 @@
       "name": "Eventos",
       "dir": "docs/features/F02-eventos",
       "wave": "W2",
-      "status": "in_progress",
-      "pr": null,
-      "latestEvaluation": null
+      "status": "done",
+      "pr": "https://github.com/thiagopelikan/mba-ia-catraca/pull/2",
+      "latestEvaluation": "docs/features/F02-eventos/evaluations/eval-01.md"
     },
     {
       "id": "F03",
       "name": "Compra e ingressos",
       "dir": "docs/features/F03-compra-e-ingressos",
       "wave": "W3",
-      "status": "specified",
+      "status": "in_progress",
       "pr": null,
       "latestEvaluation": null
     },
