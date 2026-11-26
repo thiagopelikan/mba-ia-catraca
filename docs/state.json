@@ -1,15 +1,79 @@
 {
   "project": "catraca",
   "updatedAt": "2026-11-26",
-  "statusValues": ["pending", "specified", "in_progress", "in_evaluation", "done"],
-  "harness": { "status": "done" },
+  "statusValues": [
+    "pending",
+    "specified",
+    "in_progress",
+    "in_evaluation",
+    "done"
+  ],
+  "harness": {
+    "status": "done"
+  },
   "features": [
-    { "id": "F01", "name": "Contas e acesso", "dir": "docs/features/F01-contas-e-acesso", "wave": "W1", "status": "pending", "pr": null, "latestEvaluation": null },
-    { "id": "F02", "name": "Eventos", "dir": "docs/features/F02-eventos", "wave": "W2", "status": "pending", "pr": null, "latestEvaluation": null },
-    { "id": "F03", "name": "Compra e ingressos", "dir": "docs/features/F03-compra-e-ingressos", "wave": "W3", "status": "pending", "pr": null, "latestEvaluation": null },
-    { "id": "F04", "name": "API de parceiros", "dir": "docs/features/F04-api-de-parceiros", "wave": "W4", "status": "pending", "pr": null, "latestEvaluation": null },
-    { "id": "F05", "name": "Check-in", "dir": "docs/features/F05-check-in", "wave": "W4", "status": "pending", "pr": null, "latestEvaluation": null },
-    { "id": "F06", "name": "Cancelamento", "dir": "docs/features/F06-cancelamento", "wave": "W4", "status": "pending", "pr": null, "latestEvaluation": null },
-    { "id": "F07", "name": "Painel", "dir": "docs/features/F07-painel", "wave": "W5", "status": "pending", "pr": null, "latestEvaluation": null }
+    {
+      "id": "F01",
+      "name": "Contas e acesso",
+      "dir": "docs/features/F01-contas-e-acesso",
+      "wave": "W1",
+      "status": "specified",
+      "pr": null,
+      "latestEvaluation": null
+    },
+    {
+      "id": "F02",
+      "name": "Eventos",
+      "dir": "docs/features/F02-eventos",
+      "wave": "W2",
+      "status": "pending",
+      "pr": null,
+      "latestEvaluation": null
+    },
+    {
+      "id": "F03",
+      "name": "Compra e ingressos",
+      "dir": "docs/features/F03-compra-e-ingressos",
+      "wave": "W3",
+      "status": "pending",
+      "pr": null,
+      "latestEvaluation": null
+    },
+    {
+      "id": "F04",
+      "name": "API de parceiros",
+      "dir": "docs/features/F04-api-de-parceiros",
+      "wave": "W4",
+      "status": "pending",
+      "pr": null,
+      "latestEvaluation": null
+    },
+    {
+      "id": "F05",
+      "name": "Check-in",
+      "dir": "docs/features/F05-check-in",
+      "wave": "W4",
+      "status": "pending",
+      "pr": null,
+      "latestEvaluation": null
+    },
+    {
+      "id": "F06",
+      "name": "Cancelamento",
+      "dir": "docs/features/F06-cancelamento",
+      "wave": "W4",
+      "status": "pending",
+      "pr": null,
+      "latestEvaluation": null
+    },
+    {
+      "id": "F07",
+      "name": "Painel",
+      "dir": "docs/features/F07-painel",
+      "wave": "W5",
+      "status": "pending",
+      "pr": null,
+      "latestEvaluation": null
+    }
   ]
 }
