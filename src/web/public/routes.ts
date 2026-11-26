@@ -1,29 +1,26 @@
 import type { FastifyInstance } from "fastify";
-import { formatDateTimeBR } from "../../domain/datetime";
-import { getSellableEvent, listSellableEvents, type EventRecord } from "../../domain/events";
-import { formatBRL } from "../../domain/money";
+import { getSellableEvent, listSellableEvents } from "../../domain/events";
+import { getAvailableSeatsByEvent } from "../../domain/tickets";
+import { presentEvent, renderEventPage, renderPublicEventNotFound } from "./event-page";
 
-function presentEvent(event: EventRecord) {
-  return {
-    id: event.id,
-    name: event.name,
-    venue: event.venue,
-    startsAtLabel: formatDateTimeBR(event.startsAt),
-    priceLabel: formatBRL(event.priceCents),
-  };
-}
-
-/** Área pública (visitante): vitrine e página do evento à venda. A compra entra na F03. */
+/** Área pública (visitante): vitrine e página do evento à venda. A compra em si fica em `participant/routes.ts`. */
 export async function registerPublicRoutes(app: FastifyInstance): Promise<void> {
   app.get("/", async (_request, reply) => {
     const events = await listSellableEvents(app.db);
-    return reply.view("public/home.ejs", { title: "Vitrine", events: events.map(presentEvent) });
+    const seats = await getAvailableSeatsByEvent(
+      app.db,
+      events.map((event) => event.id),
+    );
+    return reply.view("public/home.ejs", {
+      title: "Vitrine",
+      events: events.map((event) => presentEvent(event, seats.get(event.id) ?? 0)),
+    });
   });
 
   app.get("/eventos/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
     const event = await getSellableEvent(app.db, id);
-    if (!event) return reply.code(404).view("public/not-found.ejs", { title: "Evento não encontrado" });
-    return reply.view("public/event.ejs", { title: event.name, event: presentEvent(event) });
+    if (!event) return renderPublicEventNotFound(reply);
+    return renderEventPage(app.db, reply, event);
   });
 }

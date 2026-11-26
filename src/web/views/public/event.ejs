@@ -5,5 +5,27 @@
   <li><strong>Local:</strong> <%= event.venue %></li>
   <li><strong>Preço:</strong> <%= event.priceLabel %></li>
 </ul>
+
+<section id="compra">
+<% if (locals.error) { %><p class="message error"><%= error %></p><% } %>
+<% if (event.available === 0) { %>
+  <p class="message"><strong>Ingressos esgotados</strong></p>
+<% } else { %>
+  <p>Vagas disponíveis: <%= event.available %></p>
+  <% if (locals.user && locals.user.role === 'participant') { %>
+  <form method="post" action="/eventos/<%= event.id %>/comprar">
+    <label>Número do cartão
+      <input type="text" name="cardNumber" inputmode="numeric" autocomplete="off" maxlength="16" required>
+    </label>
+    <button type="submit">Comprar ingresso</button>
+  </form>
+  <% } else if (locals.user) { %>
+  <p>Compras são feitas com uma conta de participante</p>
+  <% } else { %>
+  <p><a href="/entrar?next=/eventos/<%= event.id %>">Entre para comprar</a></p>
+  <% } %>
+<% } %>
+</section>
+
 <p><a href="/">Voltar para a vitrine</a></p>
 <%- include('../partials/foot') %>
