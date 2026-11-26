@@ -242,7 +242,9 @@ describe("editar", () => {
     expect(page.body).toContain("Show Cancelado");
     expect(page.body).toContain("Cancelado");
     expect(page.body).not.toContain("Editar evento");
-    expect(page.body).not.toContain("<form method=\"post\" action=\"/organizador");
+    // Sem formulário de edição nem de publicação (o de check-in, da F05, continua em evento cancelado).
+    expect(page.body).not.toContain(`action="${path}"`);
+    expect(page.body).not.toContain(`action="${path}/publicar"`);
     expect(page.body).not.toContain("Publicar");
 
     const edit = await post(path, cookieA, form({ name: "Reaberto" }));

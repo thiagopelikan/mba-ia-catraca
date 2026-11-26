@@ -1,1 +1,18 @@
 <%# F05 (check-in): seção preenchida pela F05. Recebe `event` e `data`. %>
+<section id="check-in">
+  <h2>Check-in</h2>
+  <% if (event.status === 'published' || event.status === 'cancelled') { %>
+  <form method="post" action="/organizador/eventos/<%= event.id %>/check-in">
+    <label>Código do ingresso
+      <input type="text" name="code" autocomplete="off" required>
+    </label>
+    <button type="submit">Fazer check-in</button>
+  </form>
+  <% } else { %>
+  <p>Publique o evento para fazer check-in</p>
+  <% } %>
+  <% if (data.message) { %>
+  <p class="message" data-checkin-outcome="<%= data.outcome %>"><%= data.message %></p>
+  <p>Código consultado: <code><%= data.code %></code></p>
+  <% } %>
+</section>
