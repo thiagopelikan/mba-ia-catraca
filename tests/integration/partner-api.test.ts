@@ -385,3 +385,76 @@ describe("POST /api/partner/events/:eventId/purchases", () => {
     }
   });
 });
+
+describe("GET /api/partner/tickets/:ticketId", () => {
+  const TICKET_KEYS = ["checkedIn", "code", "eventId", "status", "ticketId"];
+
+  it("ingresso comprado pela API → 200 com exatamente ticketId, code, eventId, status e checkedIn", async () => {
+    const event = await createTestEvent(db, organizerId);
+    const purchase = (await post(purchaseUrl(event.id), VALID_BODY)).json() as { ticketId: string; code: string };
+
+    const response = await get(`/api/partner/tickets/${purchase.ticketId}`);
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toBe(JSON_TYPE);
+    expect(Object.keys(response.json()).sort()).toEqual(TICKET_KEYS);
+    expect(response.json()).toEqual({
+      ticketId: purchase.ticketId,
+      code: purchase.code,
+      eventId: event.id,
+      status: "pending",
+      checkedIn: false,
+    });
+
+    await deliverDueCharges(db, new Date(Date.now() + 60 * 60 * 1000));
+    expect((await get(`/api/partner/tickets/${purchase.ticketId}`)).json().status).toBe("confirmed");
+  });
+
+  it("status é o valor da API em cada um dos cinco estados", async () => {
+    const event = await createTestEvent(db, organizerId);
+    for (const status of ["pending", "confirmed", "declined", "cancelled", "refunded"] as const) {
+      const ticket = await createTestTicket(db, event.id, { status });
+      const body = (await get(`/api/partner/tickets/${ticket.id}`)).json();
+      expect(body).toEqual({ ticketId: ticket.id, code: ticket.code, eventId: event.id, status, checkedIn: false });
+    }
+  });
+
+  it("ingresso comprado pela vitrine também é consultável", async () => {
+    const event = await createTestEvent(db, organizerId);
+    const buyer = await createUser(db, { email: "ana@teste.dev", password: "senha12345", role: "participant" });
+    const ticket = await createTestTicket(db, event.id, {
+      channel: "storefront",
+      buyerUserId: buyer.id,
+      buyerEmail: buyer.email,
+      status: "confirmed",
+    });
+
+    const response = await get(`/api/partner/tickets/${ticket.id}`);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      ticketId: ticket.id,
+      code: ticket.code,
+      eventId: event.id,
+      status: "confirmed",
+      checkedIn: false,
+    });
+  });
+
+  it("checkedIn é true quando checked_in_at está preenchido", async () => {
+    const event = await createTestEvent(db, organizerId);
+    const ticket = await createTestTicket(db, event.id, { status: "confirmed", checkedIn: true });
+    const body = (await get(`/api/partner/tickets/${ticket.id}`)).json();
+    expect(Object.keys(body).sort()).toEqual(TICKET_KEYS);
+    expect(body.checkedIn).toBe(true);
+  });
+
+  it("inexistente ou de formato estranho → 404 ticket_not_found", async () => {
+    const event = await createTestEvent(db, organizerId);
+    const ticket = await createTestTicket(db, event.id);
+    for (const ticketId of ["tkt_naoexiste", "qualquer-coisa", "123", "%27%20OR%201%3D1", ticket.code, event.id]) {
+      const response = await get(`/api/partner/tickets/${ticketId}`);
+      expect(response.statusCode, ticketId).toBe(404);
+      expect(response.body).toBe('{"error":"ticket_not_found"}');
+      expect(response.headers["content-type"]).toBe(JSON_TYPE);
+    }
+  });
+});

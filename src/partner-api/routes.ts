@@ -1,7 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { toIsoSaoPaulo } from "../domain/datetime";
 import { listSellableEvents } from "../domain/events";
-import { getAvailableSeatsByEvent, isValidCardNumber, purchaseTicket, type PurchaseError } from "../domain/tickets";
+import {
+  getAvailableSeatsByEvent,
+  getTicketById,
+  isValidCardNumber,
+  purchaseTicket,
+  type PurchaseError,
+} from "../domain/tickets";
 import { registerPartnerAuth } from "./auth";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -90,6 +96,20 @@ async function partnerApi(api: FastifyInstance): Promise<void> {
       return reply.code(status).send({ error });
     }
     return reply.code(202).send({ ticketId: result.ticket.id, code: result.ticket.code, status: result.ticket.status });
+  });
+
+  // Ingresso de qualquer canal. `checkedIn` vem de `checked_in_at`, que só a F05 preenche.
+  api.get("/tickets/:ticketId", async (request, reply) => {
+    const { ticketId } = request.params as { ticketId: string };
+    const ticket = await getTicketById(api.db, ticketId);
+    if (!ticket) return reply.code(404).send({ error: "ticket_not_found" });
+    return {
+      ticketId: ticket.id,
+      code: ticket.code,
+      eventId: ticket.eventId,
+      status: ticket.status,
+      checkedIn: ticket.checkedIn,
+    };
   });
 }
 
