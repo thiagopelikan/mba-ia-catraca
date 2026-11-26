@@ -4,7 +4,7 @@
   <% if (event.status === 'published' || event.status === 'cancelled') { %>
   <form method="post" action="/organizador/eventos/<%= event.id %>/check-in">
     <label>Código do ingresso
-      <input type="text" name="code" autocomplete="off" required>
+      <input type="text" name="code" autocomplete="off" required<% if (data.message) { %> autofocus<% } %>>
     </label>
     <button type="submit">Fazer check-in</button>
   </form>

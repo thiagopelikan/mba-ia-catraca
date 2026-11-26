@@ -1,0 +1,421 @@
+/*
+ * Catraca — cartaz lambe-lambe com canhoto de ingresso.
+ * Uma família (Archivo variável): bem condensada e pesada nos títulos, como tipo de madeira; largura normal no texto.
+ * O que chama atenção: as tiras de ingresso com canhoto picotado e o carimbo do check-in. O resto fica quieto.
+ */
+@font-face {
+  font-family: "Archivo";
+  src: url("/assets/archivo.ttf") format("truetype");
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+}
+
+:root {
+  --tinta: #1a1446;
+  --tinta-suave: #5a5680;
+  --papel: #f6f7f9;
+  --branco: #ffffff;
+  --rosa: #ff3d8b;
+  --amarelo: #ffe234;
+  --verde: #00a86b;
+  --vermelho: #d9202a;
+  --linha: 2px;
+  --canhoto: 11.5rem;
+  --texto: "Archivo", "Helvetica Neue", Arial, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { background: var(--papel); }
+
+body {
+  margin: 0;
+  font-family: var(--texto);
+  font-stretch: 100%;
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  color: var(--tinta);
+}
+
+/* Títulos: tipo de cartaz */
+h1, h2, .marca {
+  font-stretch: 62%;
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: 0.005em;
+  margin: 0;
+}
+h1 { font-size: clamp(2.75rem, 9vw, 5.5rem); margin-bottom: 1.25rem; overflow-wrap: anywhere; }
+h2 { font-size: clamp(1.75rem, 4.5vw, 2.5rem); margin-bottom: 0.875rem; }
+
+a { color: inherit; text-decoration-thickness: 2px; text-underline-offset: 0.18em; }
+a:hover { background: var(--amarelo); }
+
+:focus-visible { outline: 3px solid var(--tinta); outline-offset: 3px; }
+
+/* Faixa do topo: a única área de cor chapada. A borda de baixo é o picote do ingresso. */
+.faixa {
+  background: var(--rosa);
+  padding: 0.875rem 1.25rem 1.5rem;
+  -webkit-mask: radial-gradient(circle at 9px 100%, transparent 6px, #000 6.5px) -9px 0 / 18px 100%;
+  mask: radial-gradient(circle at 9px 100%, transparent 6px, #000 6.5px) -9px 0 / 18px 100%;
+}
+.faixa-conteudo {
+  max-width: 60rem;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+}
+.marca { font-size: 2.5rem; font-weight: 900; }
+.marca a { text-decoration: none; }
+.marca a:hover { background: none; }
+.faixa nav {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 1.25rem;
+  font-weight: 600;
+}
+.faixa nav a { text-decoration: none; border-bottom: var(--linha) solid transparent; }
+.faixa nav a:hover { background: none; border-bottom-color: var(--tinta); }
+.faixa nav span { font-weight: 400; }
+.faixa nav button {
+  background: transparent;
+  color: var(--tinta);
+  border: var(--linha) solid var(--tinta);
+  padding: 0.25rem 0.75rem;
+  font-size: 0.9375rem;
+}
+.faixa nav button:hover { background: var(--tinta); color: var(--rosa); }
+
+main { max-width: 60rem; margin: 0 auto; padding: 2.25rem 1.25rem 4rem; }
+main > p { max-width: 38rem; }
+.chamada { font-size: 1.1875rem; margin: -0.5rem 0 2rem; color: var(--tinta-suave); }
+
+section { margin: 2.75rem 0; }
+
+/* Formulários */
+form { max-width: 28rem; }
+label { display: block; margin: 0 0 1rem; font-weight: 600; font-size: 0.9375rem; }
+input {
+  display: block;
+  width: 100%;
+  margin-top: 0.3125rem;
+  padding: 0.6875rem 0.75rem;
+  font: inherit;
+  font-weight: 400;
+  font-size: 1.0625rem;
+  color: var(--tinta);
+  background: var(--branco);
+  border: var(--linha) solid var(--tinta);
+  border-radius: 3px;
+}
+input:focus-visible { outline: 3px solid var(--amarelo); outline-offset: 0; box-shadow: 0 0 0 5px var(--tinta); }
+input::placeholder { color: #9a98b3; }
+
+button {
+  font: inherit;
+  font-weight: 700;
+  color: var(--papel);
+  background: var(--tinta);
+  border: var(--linha) solid var(--tinta);
+  border-radius: 3px;
+  padding: 0.6875rem 1.25rem;
+  cursor: pointer;
+}
+button:hover { background: var(--rosa); color: var(--tinta); }
+
+/* Explicações curtas ao lado de uma ação */
+.aviso { max-width: 38rem; margin: 0 0 1.25rem; padding-left: 0.875rem; border-left: 5px solid var(--amarelo); }
+.ajuda { margin: -0.375rem 0 1rem; font-size: 0.875rem; font-weight: 400; color: var(--tinta-suave); }
+
+/* Mensagens */
+.message {
+  max-width: 38rem;
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  background: var(--amarelo);
+  border: var(--linha) solid var(--tinta);
+  border-radius: 3px;
+  font-weight: 600;
+}
+.message.error { background: var(--branco); border-color: var(--vermelho); color: var(--vermelho); }
+
+/*
+ * Tiras de ingresso. O HTML continua sendo uma tabela (os contratos e o fluxo leem as linhas e os atributos);
+ * aqui cada linha vira uma tira com o canhoto à direita, separado por picote.
+ */
+.tiras { display: block; width: 100%; border-collapse: collapse; }
+.tiras thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.tiras tbody { display: grid; gap: 1rem; }
+.tiras tr {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--canhoto);
+  grid-template-rows: auto auto 1fr;
+  background: var(--branco);
+  border: var(--linha) solid var(--tinta);
+  border-radius: 7px;
+  overflow: hidden;
+}
+/* As duas mordidas do picote, em cima e embaixo da linha tracejada */
+.tiras tr::before, .tiras tr::after {
+  content: "";
+  position: absolute;
+  right: calc(var(--canhoto) - 10px);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--papel);
+  border: var(--linha) solid var(--tinta);
+}
+.tiras tr::before { top: -11px; }
+.tiras tr::after { bottom: -11px; }
+.tiras td { display: block; padding: 0 1.25rem; min-width: 0; }
+.tiras td:nth-child(1) {
+  grid-column: 1; grid-row: 1;
+  padding-top: 1.125rem;
+  font-stretch: 62%;
+  font-weight: 800;
+  font-size: clamp(1.625rem, 4.4vw, 2.375rem);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+.tiras td:nth-child(1) a { text-decoration: none; }
+.tiras td:nth-child(1) a::after { content: ""; position: absolute; inset: 0; } /* a tira inteira é clicável */
+.tiras td:nth-child(1) a:hover { background: none; text-decoration: underline; text-decoration-thickness: 3px; }
+.tiras tr:has(a:hover) { background: var(--amarelo); }
+.tiras tr:has(a:focus-visible) { outline: 3px solid var(--tinta); outline-offset: 3px; }
+.tiras td:nth-child(1) a:focus-visible { outline: none; }
+
+/* Vitrine: evento | data | local | preço | ingressos */
+.tiras.eventos td:nth-child(2) { grid-column: 1; grid-row: 2; padding-top: 0.5rem; font-weight: 600; }
+.tiras.eventos td:nth-child(3) { grid-column: 1; grid-row: 3; padding-bottom: 1.125rem; color: var(--tinta-suave); }
+.tiras.eventos td:nth-child(4),
+.tiras.eventos td:nth-child(5),
+.tiras.ingressos td:nth-child(3),
+.tiras.ingressos td:nth-child(4) {
+  grid-column: 2;
+  border-left: var(--linha) dashed var(--tinta);
+  text-align: center;
+}
+.tiras.eventos td:nth-child(4) {
+  grid-row: 1 / span 2;
+  align-self: stretch;
+  display: grid;
+  place-items: end center;
+  padding-top: 1.125rem;
+  font-stretch: 62%;
+  font-weight: 800;
+  font-size: 1.875rem;
+  line-height: 1;
+}
+.tiras.eventos td:nth-child(5) {
+  grid-row: 3;
+  padding-top: 0.375rem;
+  padding-bottom: 1.125rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* Esgotado: a tira continua lá, mas sem convite para clicar no preço */
+.tiras.eventos tr.esgotado { background: transparent; border-style: dashed; }
+.tiras.eventos tr.esgotado td:nth-child(4) { color: var(--tinta-suave); text-decoration: line-through; }
+.tiras.eventos tr.esgotado td:nth-child(5) { color: var(--vermelho); font-weight: 700; }
+
+/* Meus ingressos: evento | data | status | código | valor pago */
+.tiras.ingressos td:nth-child(2) { grid-column: 1; grid-row: 2; padding-top: 0.5rem; font-weight: 600; }
+.tiras.ingressos td:nth-child(5) { grid-column: 1; grid-row: 3; padding-bottom: 1.125rem; color: var(--tinta-suave); }
+.tiras.ingressos td:nth-child(5)::before { content: "Valor pago: "; }
+.tiras.ingressos td:nth-child(4) {
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: end center;
+  padding-top: 1.125rem;
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 1.5rem;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  user-select: all;
+}
+.tiras.ingressos td:nth-child(3) { grid-row: 3; padding-top: 0.5rem; padding-bottom: 1.125rem; font-weight: 700; }
+.tiras.ingressos td:nth-child(3)::before {
+  content: "";
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-right: 0.4375rem;
+  border-radius: 50%;
+  background: var(--tinta-suave);
+}
+.tiras.ingressos tr[data-status="confirmed"] td:nth-child(3) { color: #007a4e; }
+.tiras.ingressos tr[data-status="confirmed"] td:nth-child(3)::before { background: var(--verde); }
+.tiras.ingressos tr[data-status="pending"] td:nth-child(3)::before { background: var(--amarelo); box-shadow: 0 0 0 2px var(--tinta); }
+.tiras.ingressos tr[data-status="declined"] td:nth-child(3),
+.tiras.ingressos tr[data-status="cancelled"] td:nth-child(3),
+.tiras.ingressos tr[data-status="refunded"] td:nth-child(3) { color: var(--vermelho); }
+.tiras.ingressos tr[data-status="declined"] td:nth-child(3)::before,
+.tiras.ingressos tr[data-status="cancelled"] td:nth-child(3)::before,
+.tiras.ingressos tr[data-status="refunded"] td:nth-child(3)::before { background: var(--vermelho); }
+/* Ingresso que não vale mais entrada: a tira perde o peso */
+.tiras.ingressos tr[data-status="declined"],
+.tiras.ingressos tr[data-status="cancelled"],
+.tiras.ingressos tr[data-status="refunded"] { background: transparent; border-style: dashed; }
+.tiras.ingressos tr[data-status="declined"] td:nth-child(4),
+.tiras.ingressos tr[data-status="cancelled"] td:nth-child(4),
+.tiras.ingressos tr[data-status="refunded"] td:nth-child(4) { text-decoration: line-through; color: var(--tinta-suave); }
+
+/* Tabela simples (lista de eventos do organizador) */
+.lista { width: 100%; border-collapse: collapse; margin-top: 1.5rem; }
+.lista th {
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--tinta-suave);
+  padding: 0 0.75rem 0.5rem 0;
+  border-bottom: var(--linha) solid var(--tinta);
+}
+.lista td { padding: 0.875rem 0.75rem 0.875rem 0; border-bottom: 1px solid #cfd0dc; vertical-align: baseline; }
+.lista td:first-child { font-weight: 700; font-size: 1.1875rem; }
+.lista td:last-child, .event-status {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.event-status { background: var(--amarelo); padding: 0.125rem 0.5rem; border: var(--linha) solid var(--tinta); border-radius: 3px; }
+
+.acao {
+  display: inline-block;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--papel);
+  background: var(--tinta);
+  border: var(--linha) solid var(--tinta);
+  border-radius: 3px;
+  padding: 0.6875rem 1.25rem;
+}
+.acao:hover { background: var(--rosa); color: var(--tinta); }
+
+/* Ficha do evento (página pública e gestão) */
+.ficha { list-style: none; margin: 0 0 1.75rem; padding: 0; display: grid; gap: 0.25rem; font-size: 1.1875rem; }
+.ficha strong { font-weight: 600; color: var(--tinta-suave); }
+
+/* Compra: um canhoto sozinho */
+#compra {
+  max-width: 30rem;
+  margin: 0 0 2rem;
+  padding: 1.5rem;
+  background: var(--branco);
+  border: var(--linha) solid var(--tinta);
+  border-radius: 7px;
+}
+#compra > p:first-child { margin-top: 0; }
+#compra > p:last-child, #compra form { margin-bottom: 0; }
+#compra .message { margin-bottom: 0; }
+#compra .message.error { margin-bottom: 1rem; }
+#compra form button { width: 100%; }
+
+/* Painel: placar do evento */
+#painel dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0;
+  background: var(--branco);
+  border: var(--linha) solid var(--tinta);
+  border-radius: 7px;
+  overflow: hidden;
+}
+#painel dt, #painel dd { margin: 0; padding: 0 1.125rem; border-right: 1px solid #cfd0dc; }
+#painel dt { padding-top: 1rem; font-size: 0.9375rem; font-weight: 600; color: var(--tinta-suave); }
+#painel dd {
+  padding-bottom: 0.875rem;
+  font-stretch: 62%;
+  font-weight: 800;
+  font-size: clamp(2rem, 6vw, 3.25rem);
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid #cfd0dc;
+}
+#painel dt:nth-of-type(3n + 1), #painel dd:nth-of-type(3n + 1) { grid-column: 1; }
+#painel dt:nth-of-type(3n + 2), #painel dd:nth-of-type(3n + 2) { grid-column: 2; }
+#painel dt:nth-of-type(3n), #painel dd:nth-of-type(3n) { grid-column: 3; border-right: 0; }
+#painel dt:nth-of-type(-n + 3) { grid-row: 1; }
+#painel dd:nth-of-type(-n + 3) { grid-row: 2; }
+#painel dt:nth-of-type(n + 4) { grid-row: 3; }
+#painel dd:nth-of-type(n + 4) { grid-row: 4; border-bottom: 0; }
+#painel dt:nth-of-type(5), #painel dd[data-dashboard="revenue"] { background: var(--amarelo); color: var(--tinta); }
+
+/* Check-in: o campo é grande porque é usado em pé, na porta; o resultado é um carimbo. */
+#check-in form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 0.75rem; align-items: end; max-width: 34rem; }
+#check-in label { margin: 0; }
+#check-in input {
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 1.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.75rem;
+}
+#check-in button { font-size: 1.125rem; padding: 0.875rem 1.25rem; }
+#check-in [data-checkin-outcome] {
+  display: inline-block;
+  max-width: none;
+  margin: 2.5rem 0 0.75rem;
+  padding: 0.75rem 1.25rem 0.625rem;
+  font-stretch: 62%;
+  font-weight: 900;
+  font-size: clamp(2rem, 7vw, 3.75rem);
+  line-height: 1;
+  background: transparent;
+  color: var(--vermelho);
+  border: 5px solid currentColor;
+  border-radius: 6px;
+  transform: rotate(-2deg);
+  transform-origin: left center;
+  animation: carimbo 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+#check-in [data-checkin-outcome="admitted"] { color: #007a4e; }
+#check-in code { font-family: inherit; font-weight: 700; letter-spacing: 0.1em; }
+@keyframes carimbo {
+  from { transform: rotate(-2deg) scale(1.35); opacity: 0; }
+  to { transform: rotate(-2deg) scale(1); opacity: 1; }
+}
+
+/* Cancelar: a única ação sem volta da página */
+#cancelar { max-width: 38rem; padding: 1.25rem 1.5rem; border: var(--linha) dashed var(--vermelho); border-radius: 7px; }
+#cancelar h2 { color: var(--vermelho); }
+#cancelar p { margin: 0 0 1rem; }
+#cancelar p:last-child { margin-bottom: 0; font-weight: 700; color: var(--vermelho); }
+#cancelar button { background: var(--vermelho); border-color: var(--vermelho); color: var(--branco); }
+#cancelar button:hover { background: var(--branco); color: var(--vermelho); }
+
+.publicar { margin: 0 0 2rem; }
+.publicar button { font-size: 1.125rem; background: var(--rosa); color: var(--tinta); }
+.publicar button:hover { background: var(--tinta); color: var(--rosa); }
+
+.voltar { margin-top: 2.5rem; font-weight: 600; }
+
+@media (max-width: 40rem) {
+  :root { --canhoto: 8.25rem; }
+  body { font-size: 1rem; }
+  .faixa { padding-left: 1rem; padding-right: 1rem; }
+  .faixa nav { margin-left: 0; width: 100%; }
+  main { padding: 1.75rem 1rem 3rem; }
+  .tiras td { padding-left: 0.875rem; padding-right: 0.875rem; }
+  .tiras.eventos td:nth-child(4) { font-size: 1.5rem; }
+  .tiras.ingressos td:nth-child(4) { font-size: 1.125rem; letter-spacing: 0.06em; }
+  #painel dl { grid-template-columns: 1fr auto; }
+  #painel dt, #painel dd { grid-row: auto !important; border-right: 0 !important; border-bottom: 1px solid #cfd0dc !important; padding: 0.625rem 1rem; }
+  #painel dt { grid-column: 1 !important; align-self: center; }
+  #painel dd { grid-column: 2 !important; font-size: 1.75rem; text-align: right; }
+  #painel dt:last-of-type, #painel dd:last-of-type { border-bottom: 0 !important; }
+  #check-in form { grid-template-columns: 1fr; gap: 0.75rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #check-in [data-checkin-outcome] { animation: none; }
+}

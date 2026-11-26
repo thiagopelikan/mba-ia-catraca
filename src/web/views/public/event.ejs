@@ -1,6 +1,6 @@
 <%- include('../partials/head', { title }) %>
 <h1><%= event.name %></h1>
-<ul>
+<ul class="ficha">
   <li><strong>Data:</strong> <%= event.startsAtLabel %></li>
   <li><strong>Local:</strong> <%= event.venue %></li>
   <li><strong>Preço:</strong> <%= event.priceLabel %></li>
@@ -17,6 +17,7 @@
     <label>Número do cartão
       <input type="text" name="cardNumber" inputmode="numeric" autocomplete="off" maxlength="16" required>
     </label>
+    <p class="ajuda">Pagamento simulado: cartão de 16 dígitos com final 0001 é aprovado, e com final 0002 é recusado, em poucos segundos; finais 0003 (aprovado) e 0004 (recusado) levam cerca de 30 segundos. Qualquer outro final é recusado.</p>
     <button type="submit">Comprar ingresso</button>
   </form>
   <% } else if (locals.user) { %>
@@ -27,5 +28,5 @@
 <% } %>
 </section>
 
-<p><a href="/">Voltar para a vitrine</a></p>
+<p class="voltar"><a href="/">Voltar para a vitrine</a></p>
 <%- include('../partials/foot') %>

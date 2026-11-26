@@ -3,7 +3,10 @@
 <% if (tickets.length === 0) { %>
 <p>Você ainda não tem ingressos</p>
 <% } else { %>
-<table>
+<% if (tickets.some((ticket) => ticket.status === 'pending')) { %>
+<p class="aviso">O pagamento de um ingresso pendente é respondido pelo gateway em alguns segundos (até 40 em alguns cartões). <a href="/meus-ingressos">Atualizar a página</a></p>
+<% } %>
+<table class="tiras ingressos">
   <thead><tr><th>Evento</th><th>Data</th><th>Status</th><th>Código</th><th>Valor pago</th></tr></thead>
   <tbody>
   <% for (const ticket of tickets) { %>

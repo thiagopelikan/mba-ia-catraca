@@ -11,6 +11,7 @@ import type { PaymentGateway } from "./gateway/gateway";
 import { createSimulatedGateway } from "./gateway/simulated";
 import { partnerApiFrameworkErrors, partnerApiRewriteUrl } from "./partner-api/framework-errors";
 import { registerPartnerApiRoutes } from "./partner-api/routes";
+import { registerAssetRoutes } from "./web/assets/routes";
 import { registerAuth } from "./web/auth/plugin";
 import { registerAuthRoutes } from "./web/auth/routes";
 import { registerErrorHandler } from "./web/error-handler";
@@ -77,6 +78,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await registerAuth(app);
 
   // --- rotas por feature (uma linha por arquivo de rotas) ---
+  await registerAssetRoutes(app);
   await registerPublicRoutes(app);
   await registerAuthRoutes(app);
   await registerOrganizerRoutes(app);
