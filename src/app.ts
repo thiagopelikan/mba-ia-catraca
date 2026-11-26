@@ -11,6 +11,7 @@ import type { PaymentGateway } from "./gateway/gateway";
 import { createSimulatedGateway } from "./gateway/simulated";
 import { registerAuth } from "./web/auth/plugin";
 import { registerAuthRoutes } from "./web/auth/routes";
+import { registerCheckinRoutes } from "./web/organizer/checkin-routes";
 import { registerOrganizerEventRoutes } from "./web/organizer/event-routes";
 import { registerOrganizerRoutes } from "./web/organizer/routes";
 import { registerParticipantRoutes } from "./web/participant/routes";
@@ -64,6 +65,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await registerOrganizerRoutes(app);
   await registerOrganizerEventRoutes(app);
   await registerParticipantRoutes(app);
+  await registerCheckinRoutes(app);
 
   return app;
 }
