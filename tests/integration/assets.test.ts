@@ -20,6 +20,15 @@ describe("arquivos estáticos do visual", () => {
     expect(response.headers["content-type"]).toContain("text/css");
     expect(response.headers["cache-control"]).toBe("no-cache");
     expect(response.body).toContain("/assets/archivo.ttf");
+
+    // Revalidação: com o ETag atual, 304 sem corpo; com outro, o arquivo de novo.
+    const etag = response.headers.etag as string;
+    expect(etag).toMatch(/^"[0-9a-f]{16}"$/);
+    const same = await app.inject({ method: "GET", url: "/assets/catraca.css", headers: { "if-none-match": etag } });
+    expect(same.statusCode).toBe(304);
+    expect(same.body).toBe("");
+    const stale = await app.inject({ method: "GET", url: "/assets/catraca.css", headers: { "if-none-match": '"antigo"' } });
+    expect(stale.statusCode).toBe(200);
     await app.close();
   });
 
