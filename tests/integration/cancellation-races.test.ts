@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { config } from "../../src/config";
 import type { Db } from "../../src/db/pool";
 import { cancelEvent } from "../../src/domain/cancellation";
+import { checkInTicket } from "../../src/domain/checkin";
 import { publishEvent, updateEvent } from "../../src/domain/events";
 import { getSeatCounts, getTicketById, purchaseTicket, type PurchaseResult, type TicketStatus } from "../../src/domain/tickets";
 import type { PaymentGateway } from "../../src/gateway/gateway";
@@ -235,6 +236,66 @@ describe("corridas do cancelamento (R11)", () => {
     expect(await statusOf(c.id)).toBe("confirmed"); // outro evento: segue a vida
     expect(await undeliveredCharges(event.id)).toBe(0);
     expect(await undeliveredCharges(other.id)).toBe(0);
+  });
+
+  it(`cancelamento junto com check-ins e com as respostas do gateway: cada check-in é admitted ou event_cancelled, em cada uma de ${ROUNDS} rodadas`, async () => {
+    const CHECKINS = 12;
+    const seen = new Set<string>();
+    for (let round = 1; round <= ROUNDS; round++) {
+      const event = await createTestEvent(db, organizerId, { name: `Rodada ${round}`, capacity: 100 });
+      const confirmed = [];
+      for (let i = 0; i < CHECKINS; i++) confirmed.push(await createTestTicket(db, event.id, { status: "confirmed" }));
+      // Pendentes com resposta do gateway por entregar: o worker disputa as travas de ingresso na mesma hora.
+      for (let i = 0; i < SEEDED; i++) {
+        const seeded = await buy(event.id, CARDS[i % CARDS.length]!, i);
+        expect(seeded.ok, `rodada ${round}: compra prévia ${i}`).toBe(true);
+      }
+
+      // Os check-ins saem um atrás do outro, espaçados por uma ida ao banco (sem `sleep`), e o cancelamento entra
+      // no meio da fila, em um ponto diferente a cada rodada: há check-ins antes, durante e depois dele.
+      const cancelAt = (round * 5) % CHECKINS;
+      const checkIn = (code: string) => checkInTicket(db, { eventId: event.id, code });
+      const pendingCheckIns: Promise<Awaited<ReturnType<typeof checkInTicket>>>[] = [];
+      let cancellation: ReturnType<typeof cancelEvent> | undefined;
+      const deliveries = [deliverDueCharges(db, future()), deliverDueCharges(db, future())];
+      for (let i = 0; i < CHECKINS; i++) {
+        if (i === cancelAt) cancellation = cancelEvent(db, organizerId, event.id);
+        pendingCheckIns.push(checkIn(confirmed[i]!.code));
+        await db.query("SELECT 1");
+      }
+      const [cancelResult, outcomes] = await Promise.all([cancellation!, Promise.all(pendingCheckIns), ...deliveries]);
+
+      expect(cancelResult.ok, `rodada ${round}: cancelamento`).toBe(true);
+      for (const outcome of outcomes) seen.add(outcome);
+      expect(
+        outcomes.filter((outcome) => outcome !== "admitted" && outcome !== "event_cancelled"),
+        `rodada ${round}: resultados de check-in inesperados`,
+      ).toEqual([]);
+
+      // Quem entrou, entrou antes do cancelamento: o registro de entrada existe só para os `admitted`.
+      const { rows: checked } = await db.query<{ code: string }>(
+        "SELECT code FROM tickets WHERE event_id = $1 AND checked_in_at IS NOT NULL",
+        [event.id],
+      );
+      const admitted = confirmed.filter((_, i) => outcomes[i] === "admitted").map((ticket) => ticket.code);
+      expect(checked.map((row) => row.code).sort(), `rodada ${round}: registros de entrada`).toEqual(admitted.sort());
+
+      await deliverDueCharges(db, future());
+      const { rows } = await db.query<{ status: string }>("SELECT status FROM events WHERE id = $1", [event.id]);
+      expect(rows[0]!.status, `rodada ${round}`).toBe("cancelled");
+      const counts = await statusCounts(event.id);
+      expect(counts.pending ?? 0, `rodada ${round}: pendentes`).toBe(0);
+      expect(counts.confirmed ?? 0, `rodada ${round}: confirmados`).toBe(0);
+      expect(counts.refunded ?? 0, `rodada ${round}: estornados`).toBeGreaterThanOrEqual(CHECKINS);
+      expect(await undeliveredCharges(event.id), `rodada ${round}: cobranças por entregar`).toBe(0);
+
+      // Depois do cancelamento, o mesmo código (tenha entrado ou não) resulta em `event_cancelled`.
+      for (const ticket of confirmed) {
+        expect(await checkIn(ticket.code), `rodada ${round}: check-in depois do cancelamento`).toBe("event_cancelled");
+      }
+    }
+    // Registro do que as rodadas exercitaram de fato (não é condição de aprovação: depende da ordem de chegada).
+    console.info(`check-in × cancelamento: resultados vistos nas ${ROUNDS} rodadas: ${[...seen].sort().join(", ")}`);
   });
 
   it("updateEvent e publishEvent em evento cancelado são rejeitados e o evento não muda", async () => {
