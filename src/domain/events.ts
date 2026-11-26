@@ -1,5 +1,6 @@
 import { withTransaction, type Db, type DbClient } from "../db/pool";
 import { newId } from "./ids";
+import { hasControlChar } from "./text";
 import { getSeatCounts } from "./tickets";
 
 export type EventStatus = "draft" | "published" | "cancelled";
@@ -78,7 +79,7 @@ function toRecord(row: EventRow): EventRecord {
 
 function isValidText(value: string): boolean {
   const trimmed = value.trim();
-  return trimmed.length >= 1 && trimmed.length <= TEXT_MAX;
+  return trimmed.length >= 1 && trimmed.length <= TEXT_MAX && !hasControlChar(trimmed);
 }
 
 /** Todos os erros de validação, na ordem dos campos do formulário. */

@@ -13,6 +13,7 @@ const REGISTER_MESSAGES: Record<RegisterError, string> = {
   invalid_name: "Informe seu nome",
   invalid_email: "Informe um e-mail válido",
   invalid_password: "A senha precisa ter pelo menos 8 caracteres",
+  password_too_long: "A senha pode ter no máximo 200 caracteres",
   email_taken: "Este e-mail já está cadastrado",
 };
 const LOGIN_ERROR = "E-mail ou senha inválidos";
