@@ -17,16 +17,16 @@
       "name": "Contas e acesso",
       "dir": "docs/features/F01-contas-e-acesso",
       "wave": "W1",
-      "status": "in_evaluation",
+      "status": "done",
       "pr": "https://github.com/thiagopelikan/mba-ia-catraca/pull/1",
-      "latestEvaluation": null
+      "latestEvaluation": "docs/features/F01-contas-e-acesso/evaluations/eval-01.md"
     },
     {
       "id": "F02",
       "name": "Eventos",
       "dir": "docs/features/F02-eventos",
       "wave": "W2",
-      "status": "specified",
+      "status": "in_progress",
       "pr": null,
       "latestEvaluation": null
     },
