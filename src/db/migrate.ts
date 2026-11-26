@@ -41,7 +41,8 @@ export async function migrate(db: Db): Promise<string[]> {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const db = createPool();
+  // Sem limite por consulta: uma migração pode demorar, e a espera pela trava de outra instância migrando também.
+  const db = createPool(undefined, { queryTimeoutMs: 0 });
   migrate(db)
     .then((applied) => {
       console.log(applied.length ? `Migrações aplicadas: ${applied.join(", ")}` : "Nenhuma migração pendente.");
