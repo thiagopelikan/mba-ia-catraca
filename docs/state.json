@@ -71,9 +71,9 @@
       "name": "Painel",
       "dir": "docs/features/F07-painel",
       "wave": "W5",
-      "status": "in_progress",
-      "pr": null,
-      "latestEvaluation": null
+      "status": "done",
+      "pr": "https://github.com/thiagopelikan/mba-ia-catraca/pull/7",
+      "latestEvaluation": "docs/features/F07-painel/evaluations/eval-01.md"
     }
   ]
 }
