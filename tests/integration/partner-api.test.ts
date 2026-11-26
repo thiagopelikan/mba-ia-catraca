@@ -2,8 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../../src/app";
 import type { Db } from "../../src/db/pool";
+import { config } from "../../src/config";
 import { createUser } from "../helpers/auth";
 import { createTestDb, resetDb } from "../helpers/db";
+import { createTestEvent } from "../helpers/events";
+import { createTestTicket } from "../helpers/tickets";
 
 const KEY = "chave-de-teste-do-parceiro";
 const JSON_TYPE = "application/json; charset=utf-8";
@@ -20,7 +23,6 @@ beforeAll(async () => {
 beforeEach(async () => {
   await resetDb(db);
   organizerId = (await createUser(db, { email: "org@teste.dev", password: "senha12345", role: "organizer" })).id;
-  const { config } = await import("../../src/config");
   app = await buildApp({ db, config: { ...config, partnerApiKey: KEY } });
 });
 afterEach(async () => {
@@ -82,7 +84,6 @@ describe("autenticação por X-Api-Key", () => {
   });
 
   it("requisição sem chave não cria ingresso", async () => {
-    const { createTestEvent } = await import("../helpers/events");
     const event = await createTestEvent(db, organizerId);
     const response = await post(purchaseUrl(event.id), VALID_BODY, {});
     expect(response.statusCode).toBe(401);
@@ -115,5 +116,66 @@ describe("autenticação por X-Api-Key", () => {
 
     const health = await app.inject({ method: "GET", url: "/health" });
     expect(health.statusCode).toBe(200);
+  });
+});
+
+describe("GET /api/partner/events", () => {
+  it("sem eventos → 200 com []", async () => {
+    const response = await get("/api/partner/events");
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toBe(JSON_TYPE);
+    expect(response.body).toBe("[]");
+  });
+
+  it("traz só eventos publicados (rascunho e cancelado ficam fora), na ordem de início", async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const later = await createTestEvent(db, organizerId, { name: "Depois", startsAt: new Date(Date.now() + 20 * day) });
+    const sooner = await createTestEvent(db, organizerId, { name: "Antes", startsAt: new Date(Date.now() + 10 * day) });
+    await createTestEvent(db, organizerId, { name: "Rascunho", status: "draft" });
+    await createTestEvent(db, organizerId, { name: "Cancelado", status: "cancelled" });
+
+    const response = await get("/api/partner/events");
+    expect(response.statusCode).toBe(200);
+    expect(response.json().map((event: { id: string }) => event.id)).toEqual([sooner.id, later.id]);
+  });
+
+  it("cada item tem exatamente id, name, startsAt, priceCents e availableSeats", async () => {
+    const event = await createTestEvent(db, organizerId, {
+      name: "Jazz no Porão",
+      startsAt: new Date("2031-12-06T00:00:00.000Z"),
+      capacity: 2,
+      priceCents: 10000,
+    });
+    await createTestEvent(db, organizerId, { name: "Outro" });
+
+    const items = (await get("/api/partner/events")).json() as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(2);
+    for (const item of items) {
+      expect(Object.keys(item).sort()).toEqual(["availableSeats", "id", "name", "priceCents", "startsAt"]);
+      expect(item.startsAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-03:00$/);
+    }
+    expect(items.find((item) => item.id === event.id)).toEqual({
+      id: event.id,
+      name: "Jazz no Porão",
+      startsAt: "2031-12-05T21:00:00-03:00",
+      priceCents: 10000,
+      availableSeats: 2,
+    });
+  });
+
+  it("availableSeats = lotação − (pendentes + confirmados)", async () => {
+    const event = await createTestEvent(db, organizerId, { capacity: 7 });
+    await createTestTicket(db, event.id, { status: "pending" });
+    await createTestTicket(db, event.id, { status: "confirmed" });
+    await createTestTicket(db, event.id, { status: "confirmed" });
+    await createTestTicket(db, event.id, { status: "declined" });
+    await createTestTicket(db, event.id, { status: "cancelled" });
+    await createTestTicket(db, event.id, { status: "refunded" });
+    const full = await createTestEvent(db, organizerId, { capacity: 1 });
+    await createTestTicket(db, full.id, { status: "pending" });
+
+    const items = (await get("/api/partner/events")).json() as Array<{ id: string; availableSeats: number }>;
+    expect(items.find((item) => item.id === event.id)!.availableSeats).toBe(4);
+    expect(items.find((item) => item.id === full.id)!.availableSeats).toBe(0);
   });
 });

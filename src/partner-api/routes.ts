@@ -1,4 +1,7 @@
 import type { FastifyInstance } from "fastify";
+import { toIsoSaoPaulo } from "../domain/datetime";
+import { listSellableEvents } from "../domain/events";
+import { getAvailableSeatsByEvent } from "../domain/tickets";
 import { registerPartnerAuth } from "./auth";
 
 /** Erros de leitura do corpo (JSON mal formado, corpo vazio, tipo de mídia não aceito) chegam com 400 ou 415. */
@@ -22,6 +25,22 @@ async function partnerApi(api: FastifyInstance): Promise<void> {
   });
 
   api.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: "not_found" }));
+
+  // "À venda" e vagas vêm do domínio (F02 e F03); a API só dá a forma do contrato.
+  api.get("/events", async () => {
+    const events = await listSellableEvents(api.db);
+    const seats = await getAvailableSeatsByEvent(
+      api.db,
+      events.map((event) => event.id),
+    );
+    return events.map((event) => ({
+      id: event.id,
+      name: event.name,
+      startsAt: toIsoSaoPaulo(event.startsAt),
+      priceCents: event.priceCents,
+      availableSeats: seats.get(event.id) ?? 0,
+    }));
+  });
 }
 
 /** API de parceiros (contrato fixo do brief), sob `/api/partner`. */
