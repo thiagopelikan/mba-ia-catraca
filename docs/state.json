@@ -53,16 +53,16 @@
       "name": "Check-in",
       "dir": "docs/features/F05-check-in",
       "wave": "W4",
-      "status": "in_evaluation",
+      "status": "done",
       "pr": "https://github.com/thiagopelikan/mba-ia-catraca/pull/4",
-      "latestEvaluation": null
+      "latestEvaluation": "docs/features/F05-check-in/evaluations/eval-01.md"
     },
     {
       "id": "F06",
       "name": "Cancelamento",
       "dir": "docs/features/F06-cancelamento",
       "wave": "W4",
-      "status": "in_progress",
+      "status": "in_evaluation",
       "pr": "https://github.com/thiagopelikan/mba-ia-catraca/pull/6",
       "latestEvaluation": null
     },
