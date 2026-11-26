@@ -71,7 +71,7 @@
       "name": "Painel",
       "dir": "docs/features/F07-painel",
       "wave": "W5",
-      "status": "pending",
+      "status": "specified",
       "pr": null,
       "latestEvaluation": null
     }

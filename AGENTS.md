@@ -12,6 +12,7 @@ Tudo roda em Docker. Os scripts da raiz só chamam `docker compose`; **não é p
 | `npm run up` | Sobe banco + app, aplica migrações e seed, espera ficar saudável. Produto e API em `http://localhost:3210` |
 | `npm run down` | Derruba tudo que o `up` iniciou (o volume do banco fica; a seed é idempotente) |
 | `npm run gates` | Lint + typecheck + testes automatizados (Postgres real), em um ambiente compose isolado. Precisa passar antes de qualquer PR |
+| `node scripts/check-specs.mjs` | Confere a rastreabilidade: dependências × critérios cross-feature, R01–R13, critérios × contratos. Com `--final`, confere também o arquivo de estado |
 
 Credenciais da seed e chave de parceiro: ver `README.md`.
 
