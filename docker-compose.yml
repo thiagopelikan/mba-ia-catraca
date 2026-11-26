@@ -1,0 +1,40 @@
+name: catraca
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: catraca
+      POSTGRES_PASSWORD: catraca
+      POSTGRES_DB: catraca
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catraca -d catraca"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgres://catraca:catraca@db:5432/catraca
+      PORT: "3000"
+      PARTNER_API_KEY: ${PARTNER_API_KEY:-catraca-partner-key-dev}
+      GATEWAY_FAST_MIN_MS: ${GATEWAY_FAST_MIN_MS:-2000}
+      GATEWAY_FAST_MAX_MS: ${GATEWAY_FAST_MAX_MS:-3500}
+      GATEWAY_SLOW_MIN_MS: ${GATEWAY_SLOW_MIN_MS:-30000}
+      GATEWAY_SLOW_MAX_MS: ${GATEWAY_SLOW_MAX_MS:-36000}
+    ports:
+      - "${CATRACA_PORT:-3210}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+volumes:
+  dbdata:

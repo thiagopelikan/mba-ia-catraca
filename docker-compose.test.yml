@@ -1,0 +1,29 @@
+# Ambiente dos gates: isolado do ambiente de `npm run up`, sem portas publicadas e sem volume.
+services:
+  db-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: catraca
+      POSTGRES_PASSWORD: catraca
+      POSTGRES_DB: catraca_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catraca -d catraca_test"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  gates:
+    build: .
+    environment:
+      DATABASE_URL: postgres://catraca:catraca@db-test:5432/catraca_test
+      PARTNER_API_KEY: test-partner-key
+      GATEWAY_FAST_MIN_MS: "50"
+      GATEWAY_FAST_MAX_MS: "100"
+      GATEWAY_SLOW_MIN_MS: "600"
+      GATEWAY_SLOW_MAX_MS: "800"
+    depends_on:
+      db-test:
+        condition: service_healthy
+    command: ["sh", "-c", "npm run lint && npm run typecheck && npm run migrate && npm test"]
