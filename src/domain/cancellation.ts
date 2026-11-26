@@ -1,5 +1,6 @@
 import { withTransaction, type Db } from "../db/pool";
 import type { EventRecord, EventStatus } from "./events";
+import { isIdOf } from "./ids";
 
 export type CancelEventResult =
   | { ok: true; event: EventRecord; refunded: number; cancelled: number }
@@ -19,11 +20,6 @@ interface EventRow {
 
 const EVENT_COLUMNS = "id, organizer_id, name, starts_at, venue, capacity, price_cents, status, created_at";
 
-/** ID mal formado (vindo da URL) nem chega ao banco: é tratado como evento inexistente. */
-function isEventId(eventId: string): boolean {
-  return /^evt_[a-z0-9]{12}$/.test(eventId);
-}
-
 /**
  * Cancela um evento publicado do organizador (R11). Irreversível, síncrono e atômico: na mesma transação o evento
  * vira `cancelled`, os ingressos confirmados viram `refunded` e os pendentes viram `cancelled`.
@@ -32,7 +28,8 @@ function isEventId(eventId: string): boolean {
  * (e o ingresso pendente dela é cancelado aqui) ou entra depois (e encontra o evento cancelado).
  */
 export async function cancelEvent(db: Db, organizerId: string, eventId: string): Promise<CancelEventResult> {
-  if (!isEventId(eventId)) return { ok: false, error: "not_found" };
+  // ID mal formado (vindo da URL) nem chega ao banco: é tratado como evento inexistente.
+  if (!isIdOf("evt", eventId)) return { ok: false, error: "not_found" };
 
   return withTransaction(db, async (client): Promise<CancelEventResult> => {
     const { rows: locked } = await client.query<{ status: EventStatus }>(

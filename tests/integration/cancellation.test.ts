@@ -134,6 +134,7 @@ describe("cancelEvent (R11)", () => {
   it("evento inexistente ou com ID mal formado responde not_found", async () => {
     expect(await cancelEvent(db, organizerId, "evt_aaaaaaaaaaaa")).toEqual({ ok: false, error: "not_found" });
     expect(await cancelEvent(db, organizerId, "qualquer coisa")).toEqual({ ok: false, error: "not_found" });
+    expect(await cancelEvent(db, organizerId, "evt_\u0000aaaaaaaaaaa")).toEqual({ ok: false, error: "not_found" });
   });
 
   it("evento cancelado tem zero vagas disponíveis (R05)", async () => {

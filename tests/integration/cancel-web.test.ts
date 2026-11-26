@@ -182,6 +182,14 @@ describe("POST /organizador/eventos/:id/cancelar", () => {
     expect((await post(cancelUrl("evt_aaaaaaaaaaaa"), orgA)).statusCode).toBe(404);
   });
 
+  it("ID fora do formato (inclusive com byte NUL) responde 404, não 500", async () => {
+    for (const id of ["abc", "%00", "evt_%00", "evt_%00%00%00%00%00%00%00%00%00%00%00%00", "1%20OR%201=1"]) {
+      const response = await post(cancelUrl(id), orgA);
+      expect(response.statusCode, id).toBe(404);
+      expect(response.body, id).toContain("Evento não encontrado");
+    }
+  });
+
   it("visitante é mandado para /entrar e participante recebe 403; o evento continua publicado", async () => {
     const event = await createTestEvent(db, orgAId);
 
