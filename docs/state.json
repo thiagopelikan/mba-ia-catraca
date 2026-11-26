@@ -17,8 +17,8 @@
       "name": "Contas e acesso",
       "dir": "docs/features/F01-contas-e-acesso",
       "wave": "W1",
-      "status": "in_progress",
-      "pr": null,
+      "status": "in_evaluation",
+      "pr": "https://github.com/thiagopelikan/mba-ia-catraca/pull/1",
       "latestEvaluation": null
     },
     {
@@ -44,7 +44,7 @@
       "name": "API de parceiros",
       "dir": "docs/features/F04-api-de-parceiros",
       "wave": "W4",
-      "status": "pending",
+      "status": "specified",
       "pr": null,
       "latestEvaluation": null
     },
@@ -53,7 +53,7 @@
       "name": "Check-in",
       "dir": "docs/features/F05-check-in",
       "wave": "W4",
-      "status": "pending",
+      "status": "specified",
       "pr": null,
       "latestEvaluation": null
     },
@@ -62,7 +62,7 @@
       "name": "Cancelamento",
       "dir": "docs/features/F06-cancelamento",
       "wave": "W4",
-      "status": "pending",
+      "status": "specified",
       "pr": null,
       "latestEvaluation": null
     },
