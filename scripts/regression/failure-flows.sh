@@ -41,3 +41,23 @@ echo "== D. tempo de parada do app (sinal SIGTERM)"
 s=$(date +%s); docker compose stop app >/dev/null 2>&1; echo "stop levou $(( $(date +%s) - s ))s; exit code: $(docker inspect -f '{{.State.ExitCode}}' $(docker compose ps -aq app))"
 docker compose start app >/dev/null 2>&1; for i in 1 2 3 4 5 6 7 8 9 10; do sleep 2; [ "$(code $WEB/health)" = "200" ] && break; done; echo "app de volta: $(code $WEB/health)"
 echo "cobranças vencidas por entregar: $(sql "SELECT count(*) FROM gateway_charges WHERE delivered_at IS NULL AND respond_at < now() - interval '5 seconds'")"
+
+APP=$(docker compose ps -q app); DBC=$(docker compose ps -q db); NET=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' $DBC)
+waitup() { for i in $(seq 1 40); do sleep 1; [ "$(code $WEB/health)" = "200" ] && { echo "  health=200 depois de ${i}s"; return; }; done; echo "  NÃO VOLTOU em 40s"; }
+
+echo "== K. app reinicia com o banco fora (queda do banco durante a subida)"
+docker compose stop db >/dev/null 2>&1; docker compose restart app >/dev/null 2>&1; sleep 6
+echo "  com o banco fora: health=$(code $WEB/health) estado=$(docker inspect -f '{{.State.Status}}' $APP)"
+docker compose start db >/dev/null 2>&1; waitup
+echo "  login da seed: $(code -d 'email=orga@catraca.test&password=orga12345' $WEB/entrar)"
+
+echo "== L. partição de rede: banco de pé, mas inalcançável por ~20 s"
+E=$(novo "Falha L $SUF" 10); TL=$(compra $E 4000000000000001 | jget .ticketId); echo "  compra antes: $TL"
+docker network disconnect $NET $DBC
+for alvo in health "" api/partner/events; do
+  s=$(date +%s); c=$(curl -s -m 30 -o /dev/null -w "%{http_code}" -H "X-Api-Key: $KEY" $WEB/$alvo); echo "  durante: /$alvo → $c em $(( $(date +%s) - s ))s"
+done
+docker network connect --alias db $NET $DBC; R0=$(date +%s); waitup
+for i in $(seq 1 60); do [ "$(st $TL)" = "confirmed" ] && break; sleep 1; done
+echo "  ingresso pendente confirmou $(( $(date +%s) - R0 ))s depois da rede voltar: $(st $TL)"
+echo "  processo: $(docker inspect -f '{{.State.Status}}' $APP); linhas Unhandled no log: $(docker compose logs app --since 3m 2>&1 | grep -ci unhandled)"

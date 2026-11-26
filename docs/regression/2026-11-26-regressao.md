@@ -23,6 +23,20 @@ Os roteiros estão em `scripts/regression/` e rodam contra o produto no ar (`npm
 | R5 | Baixa | **Folga pequena do worker do gateway sob carga.** Com 600 compras em 4 s, a entrega das respostas atrasou até 2,0 s além do horário previsto e a confirmação mais lenta saiu 4,4 s depois da compra — dentro dos 5 s do brief, mas perto. O worker entrega uma resposta por vez | `races-and-load.sh`, seção H | corrigido (PR #8) |
 | R6 | Baixa | **O container do app não tem política de reinício**: qualquer queda do processo é definitiva | `docker-compose.yml` | corrigido (PR #8) |
 
+### Segunda rodada (depois do PR #8)
+
+Com o PR #8 na `main`, dois cenários de falha que tinham ficado sem teste foram exercitados (seções K e L de
+`failure-flows.sh`), e as duas brechas residuais da API registradas no `eval-02` da F04 entraram na lista:
+
+| # | Gravidade | Achado | Como reproduzir | Situação |
+|---|---|---|---|---|
+| R7 | Média | **Consultas sem limite de tempo.** Em uma partição de rede (banco de pé, mas inalcançável), as conexões já abertas ficam penduradas: `/health` não responde em 10 s e o worker do gateway trava em silêncio até o sistema operacional desistir da conexão. O ingresso pendente só confirmou dezenas de segundos depois de a rede voltar | `failure-flows.sh`, seção L | aberto (2ª rodada) |
+| R8 | Baixa | Na API, URL malformada ou ID longo enviados na **forma absoluta** do request-target (`GET http://host/api/partner/...`) respondem o 400 padrão do Fastify antes da checagem da chave | `curl --request-target "http://localhost:3210/api/partner/tickets/%E0%A4%A" …` | aberto (2ª rodada) |
+| R9 | Baixa | Na API, `eventId` com mais de 100 caracteres somado a corpo inválido responde 404 em vez de 422 (o roteador recusa o parâmetro antes de o corpo ser lido) | compra com ID de 101+ caracteres e `{"cardNumber":"123"}` | aberto (2ª rodada) |
+
+O outro cenário novo resistiu: com o **banco fora durante a subida do app** (seção K), o container fica reiniciando e
+volta sozinho, com a seed íntegra, assim que o banco retorna.
+
 ## Correção e reverificação
 
 Os seis achados foram corrigidos por um agente implementador no [PR #8](https://github.com/thiagopelikan/mba-ia-catraca/pull/8)
