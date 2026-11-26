@@ -219,15 +219,54 @@ describe("app com o banco fora do ar", () => {
 });
 
 describe("worker do gateway com o banco fora do ar", () => {
-  it("continua agendando rodadas enquanto o banco não responde", async () => {
+  it("continua agendando rodadas enquanto o banco não responde, sem inundar o log", async () => {
     const dead = createPool(DEAD_URL);
-    const worker = startGatewayWorker(dead, { intervalMs: 10 });
+    let attempts = 0;
+    const counting = new Proxy(dead, {
+      get(target, property) {
+        if (property === "connect") {
+          return () => {
+            attempts++;
+            return target.connect();
+          };
+        }
+        const value = Reflect.get(target, property) as unknown;
+        return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+      },
+    });
+    const worker = startGatewayWorker(counting, { intervalMs: 10, concurrency: 1 });
     try {
-      await waitFor(() => errorLog.mock.calls.length >= 3);
+      await waitFor(() => attempts >= 5);
     } finally {
       await worker.stop();
       await dead.end();
     }
+    // A queda é registrada uma vez (e de novo só de tempos em tempos), não a cada rodada.
+    expect(errorLog).toHaveBeenCalledTimes(1);
+    expect(String(errorLog.mock.calls[0]![0])).toContain("banco indisponível");
+  });
+
+  it("erro que não é de conexão é registrado a cada rodada, e o laço continua", async () => {
+    let attempts = 0;
+    const broken = new Proxy(db, {
+      get(target, property) {
+        if (property === "connect") {
+          return () => {
+            attempts++;
+            return Promise.reject(new Error("erro qualquer (proposital)"));
+          };
+        }
+        const value = Reflect.get(target, property) as unknown;
+        return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+      },
+    });
+    const worker = startGatewayWorker(broken, { intervalMs: 10, concurrency: 1 });
+    try {
+      await waitFor(() => attempts >= 3);
+    } finally {
+      await worker.stop();
+    }
+    expect(errorLog.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 
   it("entrega as cobranças vencidas durante a queda assim que o banco volta", async () => {
@@ -273,5 +312,8 @@ describe("worker do gateway com o banco fora do ar", () => {
     } finally {
       await worker.stop();
     }
+    const lines = (errorLog.mock.calls as unknown[][]).map((call) => String(call[0]));
+    expect(lines.some((line: string) => line.includes("banco indisponível"))).toBe(true);
+    expect(lines.some((line: string) => line.includes("banco de volta"))).toBe(true);
   });
 });
