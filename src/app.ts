@@ -9,6 +9,7 @@ import { config as defaultConfig, type Config } from "./config";
 import type { Db } from "./db/pool";
 import { registerAuth } from "./web/auth/plugin";
 import { registerAuthRoutes } from "./web/auth/routes";
+import { registerOrganizerRoutes } from "./web/organizer/routes";
 import { registerPublicRoutes } from "./web/public/routes";
 
 export interface AppDeps {
@@ -48,6 +49,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // --- rotas por feature (uma linha por arquivo de rotas) ---
   await registerPublicRoutes(app);
   await registerAuthRoutes(app);
+  await registerOrganizerRoutes(app);
 
   return app;
 }
