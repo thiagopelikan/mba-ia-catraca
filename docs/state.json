@@ -17,7 +17,7 @@
       "name": "Contas e acesso",
       "dir": "docs/features/F01-contas-e-acesso",
       "wave": "W1",
-      "status": "specified",
+      "status": "in_progress",
       "pr": null,
       "latestEvaluation": null
     },
@@ -26,7 +26,7 @@
       "name": "Eventos",
       "dir": "docs/features/F02-eventos",
       "wave": "W2",
-      "status": "pending",
+      "status": "specified",
       "pr": null,
       "latestEvaluation": null
     },
