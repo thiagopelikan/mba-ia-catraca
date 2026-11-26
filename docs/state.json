@@ -62,16 +62,16 @@
       "name": "Cancelamento",
       "dir": "docs/features/F06-cancelamento",
       "wave": "W4",
-      "status": "in_evaluation",
+      "status": "done",
       "pr": "https://github.com/thiagopelikan/mba-ia-catraca/pull/6",
-      "latestEvaluation": null
+      "latestEvaluation": "docs/features/F06-cancelamento/evaluations/eval-01.md"
     },
     {
       "id": "F07",
       "name": "Painel",
       "dir": "docs/features/F07-painel",
       "wave": "W5",
-      "status": "specified",
+      "status": "in_progress",
       "pr": null,
       "latestEvaluation": null
     }
