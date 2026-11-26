@@ -1,0 +1,8 @@
+<form method="post" action="<%= action %>">
+  <label>Nome <input type="text" name="name" value="<%= form.name %>" maxlength="200" required></label>
+  <label>Data e hora de início (horário de Brasília) <input type="datetime-local" name="startsAt" value="<%= form.startsAt %>" required></label>
+  <label>Local <input type="text" name="venue" value="<%= form.venue %>" maxlength="200" required></label>
+  <label>Lotação <input type="number" name="capacity" value="<%= form.capacity %>" min="1" step="1" required></label>
+  <label>Preço (R$) <input type="text" name="price" value="<%= form.price %>" inputmode="decimal" placeholder="100,00" required></label>
+  <button type="submit"><%= submitLabel %></button>
+</form>

@@ -9,6 +9,7 @@ import { config as defaultConfig, type Config } from "./config";
 import type { Db } from "./db/pool";
 import { registerAuth } from "./web/auth/plugin";
 import { registerAuthRoutes } from "./web/auth/routes";
+import { registerOrganizerEventRoutes } from "./web/organizer/event-routes";
 import { registerOrganizerRoutes } from "./web/organizer/routes";
 import { registerPublicRoutes } from "./web/public/routes";
 
@@ -34,6 +35,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate("db", deps.db);
   app.decorate("config", deps.config ?? defaultConfig);
+  app.decorate("managementSections", new Map());
 
   await app.register(cookie);
   await app.register(formbody);
@@ -50,6 +52,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await registerPublicRoutes(app);
   await registerAuthRoutes(app);
   await registerOrganizerRoutes(app);
+  await registerOrganizerEventRoutes(app);
 
   return app;
 }

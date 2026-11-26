@@ -1,0 +1,9 @@
+<%- include('../partials/head', { title }) %>
+<h1><%= event.name %></h1>
+<ul>
+  <li><strong>Data:</strong> <%= event.startsAtLabel %></li>
+  <li><strong>Local:</strong> <%= event.venue %></li>
+  <li><strong>Preço:</strong> <%= event.priceLabel %></li>
+</ul>
+<p><a href="/">Voltar para a vitrine</a></p>
+<%- include('../partials/foot') %>

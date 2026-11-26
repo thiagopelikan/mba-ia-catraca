@@ -1,0 +1,6 @@
+<%- include('../partials/head', { title }) %>
+<h1>Novo evento</h1>
+<% for (const message of errors) { %><p class="message error"><%= message %></p><% } %>
+<%- include('_form', { action: '/organizador/eventos', form, submitLabel: 'Criar evento' }) %>
+<p><a href="/organizador">Voltar para Meus eventos</a></p>
+<%- include('../partials/foot') %>
