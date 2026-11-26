@@ -9,7 +9,7 @@ import { config as defaultConfig, type Config } from "./config";
 import { isDbReachable, type Db } from "./db/pool";
 import type { PaymentGateway } from "./gateway/gateway";
 import { createSimulatedGateway } from "./gateway/simulated";
-import { partnerApiFrameworkErrors } from "./partner-api/framework-errors";
+import { partnerApiFrameworkErrors, partnerApiRewriteUrl } from "./partner-api/framework-errors";
 import { registerPartnerApiRoutes } from "./partner-api/routes";
 import { registerAuth } from "./web/auth/plugin";
 import { registerAuthRoutes } from "./web/auth/routes";
@@ -46,8 +46,14 @@ const VIEWS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "web",
  */
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const config = deps.config ?? defaultConfig;
-  // `frameworkErrors`: erros do roteador sob /api/partner saem no formato da API (F04); o resto fica como era.
-  const app = Fastify({ logger: false, frameworkErrors: partnerApiFrameworkErrors(config) });
+  // `rewriteUrl`: sob /api/partner, um ID que o roteador recusaria vira um ID inexistente e segue o fluxo normal da
+  // API (chave, corpo, ID). `frameworkErrors`: o que ainda for recusado ali sai no formato da API (F04). Fora de
+  // /api/partner nada muda.
+  const app = Fastify({
+    logger: false,
+    rewriteUrl: partnerApiRewriteUrl,
+    frameworkErrors: partnerApiFrameworkErrors(config),
+  });
   app.decorate("db", deps.db);
   app.decorate("config", config);
   // O worker que entrega as respostas do gateway é iniciado em `server.ts`, não aqui.

@@ -1,3 +1,5 @@
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../../src/app";
@@ -595,5 +597,144 @@ describe("casos de borda: nenhuma resposta fora do formato da API nem antes da a
     const lookalike = await app.inject({ method: "GET", url: `/api/partnerx/${BAD_URL}` });
     expect(lookalike.statusCode).toBe(400);
     expect(lookalike.json().code).toBe("FST_ERR_BAD_URL");
+  });
+
+  // Regressão R9: o ID que o roteador recusaria segue a ordem do contrato — chave, corpo (422), evento (404).
+  const refusedEventIds: Array<[string, string]> = [
+    ["de 101 caracteres", "a".repeat(101)],
+    ["de 5000 caracteres", LONG_ID],
+    ["com % malformado", BAD_URL],
+    ["terminado em % solto", "evt_%"],
+  ];
+  for (const [label, eventId] of refusedEventIds) {
+    it(`compra com eventId ${label}: sem chave → 401; corpo inválido → 422; corpo válido → 404`, async () => {
+      const invalidBodies = [
+        { buyerEmail: "a@example.com", cardNumber: "123" },
+        { cardNumber: "4000000000000001" },
+        "{isto não é json",
+        "",
+      ];
+      for (const payload of invalidBodies) {
+        for (const headers of [{}, { "x-api-key": "chave-errada" }] as Headers[]) {
+          const unauthorized = await post(purchaseUrl(eventId), payload, headers);
+          expect(unauthorized.statusCode).toBe(401);
+          expect(unauthorized.body).toBe(UNAUTHORIZED);
+        }
+        const invalid = await post(purchaseUrl(eventId), payload);
+        expect(invalid.statusCode, JSON.stringify(payload)).toBe(422);
+        expect(invalid.body).toBe(INVALID_REQUEST);
+        expect(invalid.headers["content-type"]).toBe(JSON_TYPE);
+      }
+      const tooBig = await postJson(eventId, big(VALID_BODY));
+      expect(tooBig.statusCode).toBe(422);
+      expect(tooBig.body).toBe(INVALID_REQUEST);
+
+      const valid = await post(purchaseUrl(eventId), VALID_BODY);
+      expect(valid.statusCode).toBe(404);
+      expect(valid.body).toBe(EVENT_NOT_AVAILABLE);
+      expect(valid.headers["content-type"]).toBe(JSON_TYPE);
+      expect(await ticketCount()).toBe(0);
+    });
+  }
+
+  it("eventId de exatamente 100 caracteres segue o mesmo fluxo (já seguia)", async () => {
+    const eventId = "a".repeat(100);
+    expect((await post(purchaseUrl(eventId), { cardNumber: "123" })).statusCode).toBe(422);
+    const valid = await post(purchaseUrl(eventId), VALID_BODY);
+    expect(valid.statusCode).toBe(404);
+    expect(valid.body).toBe(EVENT_NOT_AVAILABLE);
+  });
+
+  // Regressão R8: forma absoluta do request-target (`GET http://host/caminho HTTP/1.1`). O `app.inject` não envia
+  // essa forma; aqui o app escuta em uma porta e a requisição vai pela rede.
+  describe("forma absoluta do request-target", () => {
+    let port: number;
+    beforeEach(async () => {
+      await app.listen({ host: "127.0.0.1", port: 0 });
+      port = (app.server.address() as AddressInfo).port;
+    });
+
+    function absolute(
+      method: "GET" | "POST",
+      path: string,
+      headers: Headers,
+      body?: string,
+      host = `localhost:${port}`,
+    ): Promise<{ status: number; type: string | undefined; body: string }> {
+      return new Promise((resolve, reject) => {
+        const request = http.request(
+          {
+            host: "127.0.0.1",
+            port,
+            method,
+            path: `http://${host}${path}`,
+            headers: body === undefined ? headers : { "content-type": "application/json", ...headers },
+            agent: false,
+          },
+          (response) => {
+            const chunks: Buffer[] = [];
+            response.on("data", (chunk: Buffer) => chunks.push(chunk));
+            response.on("end", () =>
+              resolve({
+                status: response.statusCode ?? 0,
+                type: response.headers["content-type"],
+                body: Buffer.concat(chunks).toString("utf8"),
+              }),
+            );
+          },
+        );
+        request.on("error", reject);
+        request.end(body);
+      });
+    }
+
+    const validBody = JSON.stringify(VALID_BODY);
+    const invalidBody = JSON.stringify({ buyerEmail: "a@example.com", cardNumber: "123" });
+    const cases: Array<[string, "GET" | "POST", string, string | undefined, number, string]> = [
+      ["ticket com URL malformada", "GET", `/api/partner/tickets/${BAD_URL}`, undefined, 404, TICKET_NOT_FOUND],
+      ["ticket com ID de 5000 caracteres", "GET", `/api/partner/tickets/${LONG_ID}`, undefined, 404, TICKET_NOT_FOUND],
+      ["compra com URL malformada", "POST", purchaseUrl(BAD_URL), validBody, 404, EVENT_NOT_AVAILABLE],
+      ["compra com URL malformada e corpo inválido", "POST", purchaseUrl(BAD_URL), invalidBody, 422, INVALID_REQUEST],
+      ["compra com ID de 5000 caracteres", "POST", purchaseUrl(LONG_ID), validBody, 404, EVENT_NOT_AVAILABLE],
+      ["compra com ID de 101 caracteres e corpo inválido", "POST", purchaseUrl("a".repeat(101)), invalidBody, 422, INVALID_REQUEST],
+      ["caminho desconhecido com URL malformada", "GET", `/api/partner/outra/${BAD_URL}`, undefined, 404, '{"error":"not_found"}'],
+      ["prefixo codificado com URL malformada", "GET", `/api/%70artner/tickets/${BAD_URL}`, undefined, 404, TICKET_NOT_FOUND],
+    ];
+    for (const [label, method, path, body, status, expected] of cases) {
+      it(`${label}: sem chave ou com chave errada → 401; com chave → ${status} no formato da API`, async () => {
+        for (const headers of [{}, { "x-api-key": "chave-errada" }, { "x-api-key": "" }] as Headers[]) {
+          const response = await absolute(method, path, headers, body);
+          expect(response.status).toBe(401);
+          expect(response.body).toBe(UNAUTHORIZED);
+          expect(response.type).toBe(JSON_TYPE);
+        }
+        for (const host of [`localhost:${port}`, "outro.example"]) {
+          const response = await absolute(method, path, withKey(), body, host);
+          expect(response.status, host).toBe(status);
+          expect(response.body).toBe(expected);
+          expect(response.type).toBe(JSON_TYPE);
+        }
+        expect(await ticketCount()).toBe(0);
+      });
+    }
+
+    it("URL bem formada na forma absoluta continua funcionando", async () => {
+      expect((await absolute("GET", "/api/partner/events", {})).status).toBe(401);
+      const list = await absolute("GET", "/api/partner/events", withKey());
+      expect(list.status).toBe(200);
+      expect(list.body).toBe("[]");
+      expect((await absolute("GET", "/health", {})).status).toBe(200);
+    });
+
+    it("fora de /api/partner, a forma absoluta continua com a resposta padrão do Fastify", async () => {
+      const bad = await absolute("GET", `/eventos/${BAD_URL}?u=/api/partner/x`, withKey());
+      expect(bad.status).toBe(400);
+      expect(bad.type).toBe("application/json");
+      expect(JSON.parse(bad.body).code).toBe("FST_ERR_BAD_URL");
+
+      const long = await absolute("GET", `/eventos/${LONG_ID}`, withKey());
+      expect(long.status).toBe(414);
+      expect(JSON.parse(long.body).code).toBe("FST_ERR_MAX_PARAM_LENGTH");
+    });
   });
 });
