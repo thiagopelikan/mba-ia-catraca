@@ -53,11 +53,17 @@ echo "  login da seed: $(code -d 'email=orga@catraca.test&password=orga12345' $W
 
 echo "== L. partição de rede: banco de pé, mas inalcançável por ~20 s"
 E=$(novo "Falha L $SUF" 10); TL=$(compra $E 4000000000000001 | jget .ticketId); echo "  compra antes: $TL"
-docker network disconnect $NET $DBC
-for alvo in health "" api/partner/events; do
-  s=$(date +%s); c=$(curl -s -m 30 -o /dev/null -w "%{http_code}" -H "X-Api-Key: $KEY" $WEB/$alvo); echo "  durante: /$alvo → $c em $(( $(date +%s) - s ))s"
-done
-docker network connect --alias db $NET $DBC; R0=$(date +%s); waitup
+# Aquece o pool: são as conexões já abertas que ficam penduradas na partição (uma conexão nova falha na hora).
+for i in 1 2 3 4 5 6 7 8; do curl -s -o /dev/null $WEB/ & done; wait
+sonda() { for alvo in health "" api/partner/events; do
+  s=$(date +%s); c=$(curl -s -m 30 -o /dev/null -w "%{http_code}" -H "X-Api-Key: $KEY" $WEB/$alvo); echo "  $1: /$alvo → $c em $(( $(date +%s) - s ))s"
+done; }
+docker network disconnect $NET $DBC; P0=$(date +%s)
+sonda "durante"
+# A partição dura ~20 s de fato, por mais rápido que as rotas respondam; no fim, as rotas seguem respondendo.
+while [ $(( $(date +%s) - P0 )) -lt 20 ]; do sleep 1; done
+sonda "aos 20 s"
+docker network connect --alias db $NET $DBC; R0=$(date +%s); echo "  rede de volta depois de $(( R0 - P0 ))s"; waitup
 for i in $(seq 1 60); do [ "$(st $TL)" = "confirmed" ] && break; sleep 1; done
 echo "  ingresso pendente confirmou $(( $(date +%s) - R0 ))s depois da rede voltar: $(st $TL)"
 echo "  processo: $(docker inspect -f '{{.State.Status}}' $APP); linhas Unhandled no log: $(docker compose logs app --since 3m 2>&1 | grep -ci unhandled)"
