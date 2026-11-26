@@ -206,8 +206,12 @@ export async function applyGatewayResult(
   ticketId: string,
   outcome: "approved" | "declined",
 ): Promise<boolean> {
-  void [db, ticketId, outcome];
-  throw new Error("não implementado");
+  const status: TicketStatus = outcome === "approved" ? "confirmed" : "declined";
+  const result = await db.query(
+    "UPDATE tickets SET status = $2, resolved_at = now() WHERE id = $1 AND status = 'pending'",
+    [ticketId, status],
+  );
+  return result.rowCount === 1;
 }
 
 export async function getTicketById(db: Db, ticketId: string): Promise<TicketRecord | null> {
