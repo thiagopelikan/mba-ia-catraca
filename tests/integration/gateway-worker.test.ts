@@ -265,3 +265,104 @@ describe("buildApp e o gateway", () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe("deliverDueCharges em paralelo (regressão R5)", () => {
+  /** N ingressos pendentes com a cobrança já vencida, direto por SQL. */
+  async function seedDueCharges(total: number): Promise<void> {
+    const big = await createTestEvent(db, organizerId, { capacity: total });
+    await db.query(
+      `WITH novos AS (
+         INSERT INTO tickets (id, code, event_id, buyer_email, channel, status, price_cents_paid)
+         SELECT 'tkt_' || lpad(n::text, 12, '0'), 'R5' || lpad(n::text, 6, '0'), $1, 'carga@teste.dev', 'partner',
+                'pending', 1000
+           FROM generate_series(1, $2::int) AS n
+         RETURNING id
+       )
+       INSERT INTO gateway_charges (ticket_id, outcome, respond_at)
+       SELECT id, 'approved', now() - interval '1 second' FROM novos`,
+      [big.id, total],
+    );
+  }
+
+  type Method = (...args: unknown[]) => unknown;
+
+  /** Troca só o `connect` do pool; o resto vai direto para o pool de verdade. */
+  function withConnect(target: Db, connect: () => ReturnType<Db["connect"]>): Db {
+    return new Proxy(target, {
+      get(inner, property) {
+        if (property === "connect") return connect;
+        const value = Reflect.get(inner, property) as unknown;
+        return typeof value === "function" ? (value as Method).bind(inner) : value;
+      },
+    });
+  }
+
+  /** Conta quantas transações de entrega ficam abertas ao mesmo tempo. */
+  function countingConnections(target: Db): { db: Db; max: () => number } {
+    let open = 0;
+    let max = 0;
+    const proxy = withConnect(target, async () => {
+      const client = await target.connect();
+      open++;
+      max = Math.max(max, open);
+      const release = client.release.bind(client);
+      client.release = (error?: Error | boolean) => {
+        open--;
+        client.release = release;
+        return release(error);
+      };
+      return client;
+    });
+    return { db: proxy, max: () => max };
+  }
+
+  it("200 cobranças vencidas são entregues exatamente uma vez cada", async () => {
+    await seedDueCharges(200);
+    expect(await pendingDeliveries()).toBe(200);
+
+    expect(await deliverDueCharges(db, future())).toBe(200);
+
+    expect(await pendingDeliveries()).toBe(0);
+    const { rows } = await db.query<{ status: string; n: number }>(
+      "SELECT status, count(*)::int AS n FROM tickets WHERE code LIKE 'R5%' GROUP BY status",
+    );
+    expect(rows).toEqual([{ status: "confirmed", n: 200 }]);
+    expect(await deliverDueCharges(db, future())).toBe(0);
+  });
+
+  it("várias rodadas simultâneas somam exatamente 200: nenhuma em dobro, nenhuma esquecida", async () => {
+    await seedDueCharges(200);
+    const when = future();
+    const delivered = await Promise.all(Array.from({ length: 3 }, () => deliverDueCharges(db, when)));
+    expect(delivered.reduce((sum, n) => sum + n, 0)).toBe(200);
+    expect(await pendingDeliveries()).toBe(0);
+  });
+
+  it("por padrão roda 4 entregadores ao mesmo tempo, cada um com uma resposta por transação", async () => {
+    await seedDueCharges(200);
+    const counting = countingConnections(db);
+    expect(await deliverDueCharges(counting.db, future())).toBe(200);
+    expect(counting.max()).toBe(4);
+  });
+
+  it("a concorrência é configurável por opção", async () => {
+    await seedDueCharges(200);
+    const one = countingConnections(db);
+    expect(await deliverDueCharges(one.db, new Date(Date.now() - HOUR_MS), { concurrency: 1 })).toBe(0);
+    expect(one.max()).toBe(1);
+    const eight = countingConnections(db);
+    expect(await deliverDueCharges(eight.db, future(), { concurrency: 8 })).toBe(200);
+    expect(eight.max()).toBe(8);
+  });
+
+  it("se um entregador falha, os outros terminam antes de o erro subir", async () => {
+    await seedDueCharges(20);
+    let calls = 0;
+    const flaky = withConnect(db, () =>
+      ++calls === 2 ? Promise.reject(new Error("conexão recusada (proposital)")) : db.connect(),
+    );
+    await expect(deliverDueCharges(flaky, future())).rejects.toThrow("conexão recusada");
+    // Os outros três entregadores esvaziaram a fila; nada ficou em andamento depois da rejeição.
+    expect(await pendingDeliveries()).toBe(0);
+  });
+});
