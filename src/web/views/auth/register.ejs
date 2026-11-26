@@ -1,0 +1,11 @@
+<%- include('../partials/head', { title }) %>
+<h1>Criar conta</h1>
+<% if (error) { %><p class="message error"><%= error %></p><% } %>
+<form method="post" action="/cadastro">
+  <label>Nome <input type="text" name="name" value="<%= name %>" maxlength="100" required autofocus></label>
+  <label>E-mail <input type="email" name="email" value="<%= email %>" maxlength="254" required></label>
+  <label>Senha <input type="password" name="password" minlength="8" required></label>
+  <button type="submit">Criar conta</button>
+</form>
+<p>Já tem conta? <a href="/entrar">Entrar</a></p>
+<%- include('../partials/foot') %>

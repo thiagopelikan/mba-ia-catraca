@@ -1,0 +1,11 @@
+<%- include('../partials/head', { title }) %>
+<h1>Entrar</h1>
+<% if (error) { %><p class="message error"><%= error %></p><% } %>
+<form method="post" action="/entrar">
+  <input type="hidden" name="next" value="<%= next %>">
+  <label>E-mail <input type="email" name="email" value="<%= email %>" required autofocus></label>
+  <label>Senha <input type="password" name="password" required></label>
+  <button type="submit">Entrar</button>
+</form>
+<p>Ainda não tem conta? <a href="/cadastro">Criar conta</a></p>
+<%- include('../partials/foot') %>

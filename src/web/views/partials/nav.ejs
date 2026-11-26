@@ -1,1 +1,9 @@
 <a href="/">Vitrine</a>
+<% if (locals.user) { %>
+<% if (locals.user.role === 'organizer') { %><a href="/organizador">Área do organizador</a><% } %>
+<span>Olá, <%= locals.user.name %></span>
+<form method="post" action="/sair" style="display: inline; margin: 0;"><button type="submit">Sair</button></form>
+<% } else { %>
+<a href="/entrar">Entrar</a>
+<a href="/cadastro">Criar conta</a>
+<% } %>
