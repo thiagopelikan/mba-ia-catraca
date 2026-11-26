@@ -1,0 +1,32 @@
+<%- include('../partials/head', { title }) %>
+<h1><%= event.name %></h1>
+<p><strong>Status:</strong> <span class="event-status"><%= statusLabel %></span></p>
+<ul>
+  <li><strong>Data:</strong> <%= startsAtLabel %></li>
+  <li><strong>Local:</strong> <%= event.venue %></li>
+  <li><strong>Lotação:</strong> <%= event.capacity %></li>
+  <li><strong>Preço:</strong> <%= priceLabel %></li>
+</ul>
+
+<% for (const message of errors) { %><p class="message error"><%= message %></p><% } %>
+<% if (notice) { %><p class="message"><%= notice %></p><% } %>
+
+<% if (event.status === 'draft') { %>
+<form method="post" action="/organizador/eventos/<%= event.id %>/publicar">
+  <button type="submit">Publicar</button>
+</form>
+<% } %>
+
+<% if (event.status !== 'cancelled') { %>
+<section id="editar">
+  <h2>Editar evento</h2>
+  <%- include('_form', { action: '/organizador/eventos/' + event.id, form, submitLabel: 'Salvar alterações' }) %>
+</section>
+<% } %>
+
+<%- include('partials/dashboard', { event, data: sections.dashboard }) %>
+<%- include('partials/checkin', { event, data: sections.checkin }) %>
+<%- include('partials/cancel', { event, data: sections.cancel }) %>
+
+<p><a href="/organizador">Voltar para Meus eventos</a></p>
+<%- include('../partials/foot') %>

@@ -120,8 +120,14 @@ export async function createEvent(
   return { ok: true, event: toRecord(rows[0]!) };
 }
 
+/** ID mal formado (vindo da URL) nem chega ao banco: é tratado como evento inexistente. */
+function isEventId(eventId: string): boolean {
+  return /^evt_[a-z0-9]{12}$/.test(eventId);
+}
+
 /** Trava a linha do evento do organizador (regra 3 do AGENTS.md). `null` se não existe ou é de outro. */
 async function lockOwnedEvent(client: DbClient, organizerId: string, eventId: string): Promise<EventRecord | null> {
+  if (!isEventId(eventId)) return null;
   const { rows } = await client.query<EventRow>(
     `SELECT ${COLUMNS} FROM events WHERE id = $1 AND organizer_id = $2 FOR UPDATE`,
     [eventId, organizerId],
@@ -174,6 +180,7 @@ export async function publishEvent(db: Db, organizerId: string, eventId: string)
 
 /** `null` se o evento não existe OU é de outro organizador (quem chama não distingue os dois casos). */
 export async function getEventForOrganizer(db: Db, organizerId: string, eventId: string): Promise<EventRecord | null> {
+  if (!isEventId(eventId)) return null;
   const { rows } = await db.query<EventRow>(`SELECT ${COLUMNS} FROM events WHERE id = $1 AND organizer_id = $2`, [
     eventId,
     organizerId,
@@ -199,6 +206,7 @@ export async function listSellableEvents(db: Db): Promise<EventRecord[]> {
 }
 
 export async function getSellableEvent(db: Db, eventId: string): Promise<EventRecord | null> {
+  if (!isEventId(eventId)) return null;
   const { rows } = await db.query<EventRow>(`SELECT ${COLUMNS} FROM events WHERE id = $1 AND ${SELLABLE}`, [eventId]);
   return rows[0] ? toRecord(rows[0]) : null;
 }
