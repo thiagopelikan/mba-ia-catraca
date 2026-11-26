@@ -16,12 +16,35 @@ Os roteiros estão em `scripts/regression/` e rodam contra o produto no ar (`npm
 
 | # | Gravidade | Achado | Como reproduzir | Situação |
 |---|---|---|---|---|
-| R1 | **Alta** | **Reiniciar ou parar o banco derruba o app para sempre.** O pool de conexões não trata o evento `error` de uma conexão ociosa; o processo Node morre com `Unhandled 'error' event` e nada o reinicia. O produto só volta com `npm run up` | `docker compose restart db` com o app no ar; `/health` não responde mais | aberto |
-| R2 | Média | **Byte NUL responde 500** em cinco pontos da interface web: cookie de sessão (`catraca_session=%00`, em qualquer página), nome e e-mail no cadastro, nome e local do evento. O valor chega ao Postgres, que recusa a sequência | `hostile-inputs.sh` | aberto |
-| R3 | Média | **Erros 5xx não são registrados em lugar nenhum** (`logger: false` e nenhum tratador de erro nas páginas) e a resposta é o JSON cru do Fastify, não uma página do produto. Uma falha em produção seria invisível | provocar R2 e olhar `docker compose logs app` | aberto |
-| R4 | Baixa | **Senha sem limite de tamanho:** o cadastro aceita senha de 900 KB, e cada cadastro ou login paga o custo de CPU do `scrypt` sobre ela | `hostile-inputs.sh` ("cadastro senha de 1 MB-") | aberto |
-| R5 | Baixa | **Folga pequena do worker do gateway sob carga.** Com 600 compras em 4 s, a entrega das respostas atrasou até 2,0 s além do horário previsto e a confirmação mais lenta saiu 4,4 s depois da compra — dentro dos 5 s do brief, mas perto. O worker entrega uma resposta por vez | `races-and-load.sh`, seção H | aberto |
-| R6 | Baixa | **O container do app não tem política de reinício**: qualquer queda do processo é definitiva | `docker-compose.yml` | aberto |
+| R1 | **Alta** | **Reiniciar ou parar o banco derruba o app para sempre.** O pool de conexões não trata o evento `error` de uma conexão ociosa; o processo Node morre com `Unhandled 'error' event` e nada o reinicia. O produto só volta com `npm run up` | `docker compose restart db` com o app no ar; `/health` não responde mais | corrigido (PR #8) |
+| R2 | Média | **Byte NUL responde 500** em cinco pontos da interface web: cookie de sessão (`catraca_session=%00`, em qualquer página), nome e e-mail no cadastro, nome e local do evento. O valor chega ao Postgres, que recusa a sequência | `hostile-inputs.sh` | corrigido (PR #8) |
+| R3 | Média | **Erros 5xx não são registrados em lugar nenhum** (`logger: false` e nenhum tratador de erro nas páginas) e a resposta é o JSON cru do Fastify, não uma página do produto. Uma falha em produção seria invisível | provocar R2 e olhar `docker compose logs app` | corrigido (PR #8) |
+| R4 | Baixa | **Senha sem limite de tamanho:** o cadastro aceita senha de 900 KB, e cada cadastro ou login paga o custo de CPU do `scrypt` sobre ela | `hostile-inputs.sh` ("cadastro senha de 1 MB-") | corrigido (PR #8) |
+| R5 | Baixa | **Folga pequena do worker do gateway sob carga.** Com 600 compras em 4 s, a entrega das respostas atrasou até 2,0 s além do horário previsto e a confirmação mais lenta saiu 4,4 s depois da compra — dentro dos 5 s do brief, mas perto. O worker entrega uma resposta por vez | `races-and-load.sh`, seção H | corrigido (PR #8) |
+| R6 | Baixa | **O container do app não tem política de reinício**: qualquer queda do processo é definitiva | `docker-compose.yml` | corrigido (PR #8) |
+
+## Correção e reverificação
+
+Os seis achados foram corrigidos por um agente implementador no [PR #8](https://github.com/thiagopelikan/mba-ia-catraca/pull/8)
+(branch `fix/regressao-robustez`, commit `464372f`) e reverificados pelo orquestrador, que rodou de novo os três
+roteiros, os gates e o Fluxo do avaliador contra a branch antes do merge:
+
+| # | O que mudou | Reverificação |
+|---|---|---|
+| R1 | O pool trata o `error` de conexões ociosas e de conexões emprestadas a uma transação; limite de 5 s para obter conexão; `/health` responde 503 com o banco fora; o worker registra a queda e segue tentando | Banco reiniciado: `/health` volta a 200 no mesmo processo e o ingresso comprado antes confirma. Banco parado: páginas 503 e API 500, sem queda do app; ao voltar, tudo responde 200 e o ingresso pendente confirma |
+| R2 | Token de sessão fora do formato é tratado como inexistente; caractere de controle em nome, e-mail, senha e local é entrada inválida | `hostile-inputs.sh`: nenhuma resposta 5xx (6×200, 4×302, 2×400, 5×401, 6×404, 1×413, 1×414, 19×422, 1×431) |
+| R3 | Tratador de erro nas páginas: 5xx registrado com método e URL e respondido com página do produto (503 quando é o banco); a API de parceiros também registra os 5xx | Com o banco parado, o log mostra `Erro em GET / (resposta 503)` e os erros da API |
+| R4 | Senha acima de 200 caracteres é recusada no cadastro (`A senha pode ter no máximo 200 caracteres`) e no login, sem calcular o hash | Senha de 900 KB responde 422 |
+| R5 | O worker ganhou um pool de conexões próprio (antes disputava conexão com as requisições, que era a causa real do atraso) e entrega com 4 entregadores em paralelo, ainda uma resposta por transação | 600 compras: atraso máximo de entrega de 0,9 s (antes 2,0 s). A confirmação mais lenta saiu em 4,5 s, porque nessa execução a própria rajada levou 7 s; segue dentro dos 5 s, com folga pequena sob essa carga |
+| R6 | `restart: unless-stopped` no serviço do app | `npm run down` continua removendo tudo (`docker ps -a` vazio) |
+
+Depois da correção: `npm run gates` passa com 524 testes, `npm run flow` passa com 74 verificações e as invariantes
+globais seguem todas em zero.
+
+Efeitos colaterais conhecidos da correção: sob sobrecarga extrema uma requisição falha em 5 s em vez de esperar sem
+limite; os erros 4xx do servidor nas páginas (400, 413, 415) passaram a ser HTML; o produto usa até 24 conexões com o
+banco. Os relatórios de avaliação das features atestam os commits anteriores a esta correção; quem cobre o estado
+atual da `main` são os gates, o Fluxo do avaliador e estes roteiros.
 
 ## O que resistiu
 
