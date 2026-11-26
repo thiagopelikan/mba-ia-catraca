@@ -35,16 +35,16 @@
       "name": "Compra e ingressos",
       "dir": "docs/features/F03-compra-e-ingressos",
       "wave": "W3",
-      "status": "in_progress",
-      "pr": null,
-      "latestEvaluation": null
+      "status": "done",
+      "pr": "https://github.com/thiagopelikan/mba-ia-catraca/pull/3",
+      "latestEvaluation": "docs/features/F03-compra-e-ingressos/evaluations/eval-01.md"
     },
     {
       "id": "F04",
       "name": "API de parceiros",
       "dir": "docs/features/F04-api-de-parceiros",
       "wave": "W4",
-      "status": "specified",
+      "status": "in_progress",
       "pr": null,
       "latestEvaluation": null
     },
@@ -53,7 +53,7 @@
       "name": "Check-in",
       "dir": "docs/features/F05-check-in",
       "wave": "W4",
-      "status": "specified",
+      "status": "in_progress",
       "pr": null,
       "latestEvaluation": null
     },
@@ -62,7 +62,7 @@
       "name": "Cancelamento",
       "dir": "docs/features/F06-cancelamento",
       "wave": "W4",
-      "status": "specified",
+      "status": "in_progress",
       "pr": null,
       "latestEvaluation": null
     },
