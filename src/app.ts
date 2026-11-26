@@ -13,6 +13,7 @@ import { partnerApiFrameworkErrors } from "./partner-api/framework-errors";
 import { registerPartnerApiRoutes } from "./partner-api/routes";
 import { registerAuth } from "./web/auth/plugin";
 import { registerAuthRoutes } from "./web/auth/routes";
+import { registerErrorHandler } from "./web/error-handler";
 import { registerOrganizerCancelRoutes } from "./web/organizer/cancel-routes";
 import { registerCheckinRoutes } from "./web/organizer/checkin-routes";
 import { registerDashboard } from "./web/organizer/dashboard-routes";
@@ -57,8 +58,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(formbody);
   await app.register(view, { engine: { ejs }, root: VIEWS_DIR });
 
-  app.get("/health", async () => {
-    await app.db.query("SELECT 1");
+  // Erros das páginas: log e página do produto. A API de parceiros define o tratador dela (JSON) no próprio plugin.
+  registerErrorHandler(app);
+
+  app.get("/health", async (_request, reply) => {
+    try {
+      await app.db.query("SELECT 1");
+    } catch {
+      // Banco fora do ar: o app está de pé, mas não atende. Quem registra a queda é o pool e o worker.
+      return reply.code(503).send({ status: "unavailable" });
+    }
     return { status: "ok" };
   });
 

@@ -214,7 +214,9 @@ describe("corridas do cancelamento (R11)", () => {
       await blocker.query("BEGIN");
       await blocker.query("SELECT id FROM tickets WHERE id = $1 FOR UPDATE", [c.id]);
 
-      delivery = deliverDueCharges(db, future());
+      // Um entregador só: o entrelaçamento montado aqui depende da ordem de entrega A, C, B. Com os entregadores
+      // em paralelo (o padrão), outro entregaria o B enquanto este espera o C — é o caso do teste seguinte.
+      delivery = deliverDueCharges(db, future(), { concurrency: 1 });
       delivery.catch(() => undefined);
       await lockWaiters(1);
 
@@ -235,6 +237,58 @@ describe("corridas do cancelamento (R11)", () => {
     expect(await statusOf(b.id)).toBe("cancelled"); // o cancelamento chegou antes; a aprovação foi ignorada
     expect(await statusOf(c.id)).toBe("confirmed"); // outro evento: segue a vida
     expect(await undeliveredCharges(event.id)).toBe(0);
+    expect(await undeliveredCharges(other.id)).toBe(0);
+  });
+
+  it("entregadores em paralelo: um preso em outro evento não segura o cancelamento nem as demais entregas", async () => {
+    const event = await createTestEvent(db, organizerId, { name: "Cancelado" });
+    const other = await createTestEvent(db, organizerId, { name: "Outro" });
+    const b = await createTestTicket(db, event.id, { status: "pending" });
+    const a = await createTestTicket(db, event.id, { status: "pending" });
+    const c = await createTestTicket(db, other.id, { status: "pending" });
+    const order = [a, c, b];
+    for (let i = 0; i < order.length; i++) {
+      await db.query(
+        "INSERT INTO gateway_charges (ticket_id, outcome, respond_at) VALUES ($1, 'approved', now() - make_interval(secs => $2))",
+        [order[i]!.id, order.length - i],
+      );
+    }
+
+    const until = async (condition: () => Promise<boolean>, what: string): Promise<void> => {
+      const deadline = Date.now() + 10_000;
+      while (!(await condition())) {
+        if (Date.now() > deadline) throw new Error(`esperava ${what}`);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    };
+
+    // Um terceiro segura o ingresso C: o entregador que pegou a resposta do C fica parado nela.
+    const blocker = await db.connect();
+    let delivery: Promise<number>;
+    try {
+      await blocker.query("BEGIN");
+      await blocker.query("SELECT id FROM tickets WHERE id = $1 FOR UPDATE", [c.id]);
+
+      delivery = deliverDueCharges(db, future());
+      delivery.catch(() => undefined);
+
+      // Os outros entregadores seguem: A e B são entregues mesmo com o C parado.
+      await until(async () => (await undeliveredCharges(event.id)) === 0, "as respostas de A e B entregues");
+      expect(await statusOf(a.id)).toBe("confirmed");
+      expect(await statusOf(b.id)).toBe("confirmed");
+      expect(await undeliveredCharges(other.id)).toBe(1);
+
+      // O entregador parado só tem na mão a resposta do C: o cancelamento do outro evento não espera por ele.
+      expect(await cancelEvent(db, organizerId, event.id)).toMatchObject({ ok: true, refunded: 2, cancelled: 0 });
+    } finally {
+      await blocker.query("ROLLBACK");
+      blocker.release();
+    }
+
+    expect(await delivery).toBe(3);
+    expect(await statusOf(a.id)).toBe("refunded");
+    expect(await statusOf(b.id)).toBe("refunded");
+    expect(await statusOf(c.id)).toBe("confirmed");
     expect(await undeliveredCharges(other.id)).toBe(0);
   });
 

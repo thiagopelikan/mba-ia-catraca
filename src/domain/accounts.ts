@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Db } from "../db/pool";
 import { newId } from "./ids";
 import { hashPassword, verifyPassword } from "./passwords";
+import { hasControlChar } from "./text";
 
 export type Role = "participant" | "organizer";
 export interface User {
@@ -11,13 +12,22 @@ export interface User {
   role: Role;
 }
 
-export type RegisterError = "invalid_name" | "invalid_email" | "invalid_password" | "email_taken";
+export type RegisterError =
+  | "invalid_name"
+  | "invalid_email"
+  | "invalid_password"
+  | "password_too_long"
+  | "email_taken";
 export type RegisterResult = { ok: true; user: User } | { ok: false; error: RegisterError };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NAME_MAX = 100;
 const EMAIL_MAX = 254;
 const PASSWORD_MIN = 8;
+// Limite generoso para uma senha de verdade; sem ele, cada cadastro ou login pagaria o `scrypt` de um texto enorme.
+const PASSWORD_MAX = 200;
+/** `createSession` gera 32 bytes aleatórios em hexadecimal. */
+const SESSION_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 const UNIQUE_VIOLATION = "23505";
 
 /** Duração da sessão (e do cookie), em segundos: 7 dias. */
@@ -38,12 +48,18 @@ export async function registerParticipant(
   input: { name: string; email: string; password: string },
 ): Promise<RegisterResult> {
   const name = input.name.trim();
-  if (name.length < 1 || name.length > NAME_MAX) return { ok: false, error: "invalid_name" };
+  if (name.length < 1 || name.length > NAME_MAX || hasControlChar(name)) return { ok: false, error: "invalid_name" };
 
   const email = normalizeEmail(input.email);
-  if (email.length > EMAIL_MAX || !EMAIL_PATTERN.test(email)) return { ok: false, error: "invalid_email" };
+  if (email.length > EMAIL_MAX || !EMAIL_PATTERN.test(email) || hasControlChar(email)) {
+    return { ok: false, error: "invalid_email" };
+  }
 
-  if (input.password.length < PASSWORD_MIN) return { ok: false, error: "invalid_password" };
+  if (input.password.length > PASSWORD_MAX) return { ok: false, error: "password_too_long" };
+  // Senha com caractere de controle é recusada aqui porque `authenticate` nunca a aceitaria.
+  if (input.password.length < PASSWORD_MIN || hasControlChar(input.password)) {
+    return { ok: false, error: "invalid_password" };
+  }
 
   const existing = await db.query("SELECT 1 FROM users WHERE email = $1", [email]);
   if (existing.rows.length > 0) return { ok: false, error: "email_taken" };
@@ -67,9 +83,14 @@ export async function registerParticipant(
 
 /** Devolve o usuário se e-mail e senha conferem; senão `null`. */
 export async function authenticate(db: Db, email: string, password: string): Promise<User | null> {
+  // Nenhuma conta tem e-mail ou senha assim (o cadastro recusa): nem consulta o banco, nem calcula o hash.
+  const normalized = normalizeEmail(email);
+  if (normalized.length > EMAIL_MAX || hasControlChar(normalized)) return null;
+  if (password.length > PASSWORD_MAX || hasControlChar(password)) return null;
+
   const { rows } = await db.query<User & { password_hash: string }>(
     "SELECT id, name, email, role, password_hash FROM users WHERE email = $1",
-    [normalizeEmail(email)],
+    [normalized],
   );
   const row = rows[0];
   if (!row) return null;
@@ -87,9 +108,14 @@ export async function createSession(db: Db, userId: string): Promise<string> {
   return token;
 }
 
+/** Token fora do formato (cookie adulterado, byte NUL, …) não é sessão alguma e nem chega ao banco. */
+function isSessionToken(token: string): boolean {
+  return typeof token === "string" && SESSION_TOKEN_PATTERN.test(token);
+}
+
 /** Devolve o usuário de uma sessão válida e não expirada; senão `null`. */
 export async function getUserBySession(db: Db, token: string): Promise<User | null> {
-  if (!token) return null;
+  if (!isSessionToken(token)) return null;
   const { rows } = await db.query<User>(
     `SELECT u.id, u.name, u.email, u.role
        FROM sessions s
@@ -101,5 +127,6 @@ export async function getUserBySession(db: Db, token: string): Promise<User | nu
 }
 
 export async function destroySession(db: Db, token: string): Promise<void> {
+  if (!isSessionToken(token)) return;
   await db.query("DELETE FROM sessions WHERE token = $1", [token]);
 }
