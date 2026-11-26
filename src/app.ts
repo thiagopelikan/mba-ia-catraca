@@ -7,6 +7,7 @@ import ejs from "ejs";
 import Fastify, { type FastifyInstance } from "fastify";
 import { config as defaultConfig, type Config } from "./config";
 import type { Db } from "./db/pool";
+import { registerAuth } from "./web/auth/plugin";
 import { registerPublicRoutes } from "./web/public/routes";
 
 export interface AppDeps {
@@ -40,6 +41,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await app.db.query("SELECT 1");
     return { status: "ok" };
   });
+
+  await registerAuth(app);
 
   // --- rotas por feature (uma linha por arquivo de rotas) ---
   await registerPublicRoutes(app);
