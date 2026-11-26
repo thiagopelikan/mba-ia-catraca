@@ -62,7 +62,7 @@ curl -s -H "X-Api-Key: catraca-partner-key-dev" http://localhost:3210/api/partne
 | Papéis dos agentes (spec-writer, implementer, evaluator) | [`.claude/agents/`](.claude/agents) |
 | Templates de spec, plano, contrato e relatório | [`docs/templates/`](docs/templates) |
 | Plano-mestre do projeto | [`docs/plans/2026-11-26-catraca-mvp.md`](docs/plans/2026-11-26-catraca-mvp.md) |
-| Regressão completa (achados, correções e reverificação) | [`docs/regression/2026-11-26-regressao.md`](docs/regression/2026-11-26-regressao.md), [PR #8](https://github.com/thiagopelikan/mba-ia-catraca/pull/8) |
+| Regressão completa (achados, correções e reverificação) | [`docs/regression/2026-11-26-regressao.md`](docs/regression/2026-11-26-regressao.md), PRs [#8](https://github.com/thiagopelikan/mba-ia-catraca/pull/8) e [#9](https://github.com/thiagopelikan/mba-ia-catraca/pull/9) |
 
 Cada feature tem uma pasta com `spec.md`, `plan.md`, `contract.md` e os relatórios em `evaluations/`:
 
@@ -162,11 +162,9 @@ Como foi provado:
 
 ### Limites conhecidos
 
-Registrados pelos avaliadores, fora do brief e sem efeito em ingressos ou vagas:
+Fora do brief e sem efeito em ingressos ou vagas:
 
-- Na API, uma URL malformada enviada na forma absoluta do request-target responde 400 antes da checagem da chave, e um
-  `eventId` com mais de 100 caracteres somado a corpo inválido responde 404 em vez de 422.
 - Não há limite de tentativas de login nem token anti-CSRF (a proteção é o cookie `HttpOnly; SameSite=Lax`).
-- Depois da entrega das features, uma regressão completa achou seis problemas de robustez (o mais grave: o app
-  morria quando o banco reiniciava). Foram corrigidos no PR #8; os relatórios de avaliação das features atestam os
-  commits anteriores a essa correção.
+- Depois da entrega das features, uma regressão completa achou nove problemas de robustez (o mais grave: o app
+  morria quando o banco reiniciava), inclusive as duas brechas de borda da API registradas no `eval-02` da F04. Foram
+  corrigidos nos PRs #8 e #9; os relatórios de avaliação das features atestam os commits anteriores a essas correções.

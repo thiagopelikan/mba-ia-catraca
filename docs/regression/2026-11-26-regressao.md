@@ -30,9 +30,9 @@ Com o PR #8 na `main`, dois cenários de falha que tinham ficado sem teste foram
 
 | # | Gravidade | Achado | Como reproduzir | Situação |
 |---|---|---|---|---|
-| R7 | Média | **Consultas sem limite de tempo.** Em uma partição de rede (banco de pé, mas inalcançável), as conexões já abertas ficam penduradas: `/health` não responde em 10 s e o worker do gateway trava em silêncio até o sistema operacional desistir da conexão. O ingresso pendente só confirmou dezenas de segundos depois de a rede voltar | `failure-flows.sh`, seção L | aberto (2ª rodada) |
-| R8 | Baixa | Na API, URL malformada ou ID longo enviados na **forma absoluta** do request-target (`GET http://host/api/partner/...`) respondem o 400 padrão do Fastify antes da checagem da chave | `curl --request-target "http://localhost:3210/api/partner/tickets/%E0%A4%A" …` | aberto (2ª rodada) |
-| R9 | Baixa | Na API, `eventId` com mais de 100 caracteres somado a corpo inválido responde 404 em vez de 422 (o roteador recusa o parâmetro antes de o corpo ser lido) | compra com ID de 101+ caracteres e `{"cardNumber":"123"}` | aberto (2ª rodada) |
+| R7 | Média | **Consultas sem limite de tempo.** Em uma partição de rede (banco de pé, mas inalcançável), as conexões já abertas ficam penduradas: `/health` não responde em 10 s e o worker do gateway trava em silêncio até o sistema operacional desistir da conexão. O ingresso pendente só confirmou dezenas de segundos depois de a rede voltar | `failure-flows.sh`, seção L | corrigido (PR #9) |
+| R8 | Baixa | Na API, URL malformada ou ID longo enviados na **forma absoluta** do request-target (`GET http://host/api/partner/...`) respondem o 400 padrão do Fastify antes da checagem da chave | `curl --request-target "http://localhost:3210/api/partner/tickets/%E0%A4%A" …` | corrigido (PR #9) |
+| R9 | Baixa | Na API, `eventId` com mais de 100 caracteres somado a corpo inválido responde 404 em vez de 422 (o roteador recusa o parâmetro antes de o corpo ser lido) | compra com ID de 101+ caracteres e `{"cardNumber":"123"}` | corrigido (PR #9) |
 
 O outro cenário novo resistiu: com o **banco fora durante a subida do app** (seção K), o container fica reiniciando e
 volta sozinho, com a seed íntegra, assim que o banco retorna.
@@ -59,6 +59,24 @@ Efeitos colaterais conhecidos da correção: sob sobrecarga extrema uma requisi�
 limite; os erros 4xx do servidor nas páginas (400, 413, 415) passaram a ser HTML; o produto usa até 24 conexões com o
 banco. Os relatórios de avaliação das features atestam os commits anteriores a esta correção; quem cobre o estado
 atual da `main` são os gates, o Fluxo do avaliador e estes roteiros.
+
+### Correção da segunda rodada
+
+R7, R8 e R9 foram corrigidos no [PR #9](https://github.com/thiagopelikan/mba-ia-catraca/pull/9) (branch
+`fix/regressao-robustez-2`, commit `a02a491`) e reverificados pelo orquestrador contra a branch antes do merge:
+
+| # | O que mudou | Reverificação |
+|---|---|---|
+| R7 | Limite de 10 s por consulta no cliente (11 s no servidor) e `keepAlive` nas conexões; a conexão que estoura o limite é destruída; `/health` tem limite próprio de 2 s; o estouro é tratado como banco indisponível (página 503, API 500) e registrado | Partição de 20 s: `/health` responde 503 em 2 s, a página em até 10 s, nenhuma requisição fica sem resposta; o ingresso pendente confirma 1 s depois de a rede voltar |
+| R8 | Um `rewriteUrl` trata, sob `/api/partner`, o segmento malformado ou longo demais como um ID inexistente, na forma comum e na absoluta; a requisição segue o fluxo normal (chave → corpo → ID) | Forma absoluta: sem chave 401; com chave 404 no formato da API |
+| R9 | Mesma correção do R8 | ID de 101+ caracteres ou malformado com corpo inválido: 422; com corpo válido: 404 |
+
+Depois do PR #9: `npm run gates` passa com 556 testes; `npm run flow` com 74 verificações; `hostile-inputs.sh` sem 5xx;
+`races-and-load.sh` com 600 compras todas confirmadas, atraso máximo de entrega de 0,29 s e confirmação mais lenta em
+3,9 s; invariantes globais em zero. As páginas web não mudaram (`/eventos/<id longo>` continua 414).
+
+Efeito colateral: uma consulta legítima que passe de 10 s agora falha. Não testado: partição que descarta pacotes
+mantendo o DNS (cada conexão nova esperaria os 5 s do limite de conexão) e parada do app durante uma partição.
 
 ## O que resistiu
 
