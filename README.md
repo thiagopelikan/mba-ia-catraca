@@ -104,6 +104,13 @@ Postgres real.
 - SQL direto com `pg`, sem ORM: as garantias do produto dependem de travas e de `UPDATE` condicionais, que ficam
   explícitos no código.
 
+### Visual
+
+Nenhum critério avalia design, mas o produto ganhou uma identidade própria ([PR #10](https://github.com/thiagopelikan/mba-ia-catraca/pull/10)):
+cartaz lambe-lambe com canhoto de ingresso. A folha de estilo e a fonte (Archivo, licença OFL) são servidas pelo
+próprio app em `/assets`, sem nenhuma requisição externa. A mudança é só de aparência: o HTML mantém os textos, os
+formulários e os atributos `data-*` que os contratos e o `npm run flow` conferem.
+
 ### Como R07 foi garantida sob concorrência
 
 Existe **um único caminho de compra** (`purchaseTicket`, em `src/domain/tickets.ts`), usado pela vitrine e pela API.
