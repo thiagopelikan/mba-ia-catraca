@@ -15,6 +15,7 @@ import { registerAuth } from "./web/auth/plugin";
 import { registerAuthRoutes } from "./web/auth/routes";
 import { registerOrganizerCancelRoutes } from "./web/organizer/cancel-routes";
 import { registerCheckinRoutes } from "./web/organizer/checkin-routes";
+import { registerDashboard } from "./web/organizer/dashboard-routes";
 import { registerOrganizerEventRoutes } from "./web/organizer/event-routes";
 import { registerOrganizerRoutes } from "./web/organizer/routes";
 import { registerParticipantRoutes } from "./web/participant/routes";
@@ -72,6 +73,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await registerPartnerApiRoutes(app);
   await registerCheckinRoutes(app);
   await registerOrganizerCancelRoutes(app);
+  await registerDashboard(app);
 
   return app;
 }
