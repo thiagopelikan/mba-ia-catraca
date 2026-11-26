@@ -6,7 +6,7 @@ import view from "@fastify/view";
 import ejs from "ejs";
 import Fastify, { type FastifyInstance } from "fastify";
 import { config as defaultConfig, type Config } from "./config";
-import type { Db } from "./db/pool";
+import { isDbReachable, type Db } from "./db/pool";
 import type { PaymentGateway } from "./gateway/gateway";
 import { createSimulatedGateway } from "./gateway/simulated";
 import { partnerApiFrameworkErrors } from "./partner-api/framework-errors";
@@ -62,12 +62,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerErrorHandler(app);
 
   app.get("/health", async (_request, reply) => {
-    try {
-      await app.db.query("SELECT 1");
-    } catch {
-      // Banco fora do ar: o app está de pé, mas não atende. Quem registra a queda é o pool e o worker.
-      return reply.code(503).send({ status: "unavailable" });
-    }
+    // Banco fora do ar ou sem responder em 2 s: o app está de pé, mas não atende. Quem registra a queda é o pool
+    // e o worker.
+    if (!(await isDbReachable(app.db))) return reply.code(503).send({ status: "unavailable" });
     return { status: "ok" };
   });
 

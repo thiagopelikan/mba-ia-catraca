@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../../src/app";
 import { config } from "../../src/config";
-import { isDbUnavailableError } from "../../src/db/errors";
-import { createPool, withTransaction, type Db } from "../../src/db/pool";
+import { isDbUnavailableError, isQueryTimeoutError } from "../../src/db/errors";
+import { createPool, isDbReachable, withTransaction, type Db } from "../../src/db/pool";
 import { getTicketById, purchaseTicket } from "../../src/domain/tickets";
 import { createSimulatedGateway } from "../../src/gateway/simulated";
 import { startGatewayWorker } from "../../src/gateway/worker";
@@ -335,5 +335,233 @@ describe("worker do gateway com o banco fora do ar", () => {
     const lines = (errorLog.mock.calls as unknown[][]).map((call) => String(call[0]));
     expect(lines.some((line: string) => line.includes("banco indisponível"))).toBe(true);
     expect(lines.some((line: string) => line.includes("banco de volta"))).toBe(true);
+  });
+});
+
+/** Regressão R7: consulta sem resposta (partição de rede) tem limite de tempo e não deixa conexão suja no pool. */
+
+/** Limite curto para os testes; o do produto é de 10 s. */
+const SHORT_MS = 300;
+
+/** Segura uma trava exclusiva na tabela: toda consulta a ela fica esperando, como em um banco que não responde. */
+async function withTableLocked<T>(table: "events" | "gateway_charges", fn: () => Promise<T>): Promise<T> {
+  const locker = await admin.connect();
+  try {
+    await locker.query("BEGIN");
+    await locker.query(`LOCK TABLE ${table} IN ACCESS EXCLUSIVE MODE`);
+    return await fn();
+  } finally {
+    await locker.query("ROLLBACK");
+    locker.release();
+  }
+}
+
+/** Um "banco" cujas consultas nunca respondem nem falham. */
+function hangingDb(): Db {
+  return new Proxy(db, {
+    get(target, property) {
+      if (property === "query") return () => new Promise(() => undefined);
+      const value = Reflect.get(target, property) as unknown;
+      return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+    },
+  });
+}
+
+/** Consultas `pg_sleep(30)` ainda rodando no servidor. */
+async function sleepingBackends(): Promise<number> {
+  const { rows } = await admin.query<{ n: number }>(
+    "SELECT count(*)::int AS n FROM pg_stat_activity WHERE state = 'active' AND query LIKE 'SELECT pg_sleep(30)%'",
+  );
+  return rows[0]!.n;
+}
+
+describe("limite de tempo das consultas", () => {
+  it("o pool tem limite por consulta no cliente e, um pouco maior, no servidor; as migrações podem desligar", async () => {
+    const standard = createPool();
+    const unlimited = createPool(undefined, { queryTimeoutMs: 0 });
+    try {
+      expect(standard.options.query_timeout).toBe(10_000);
+      expect(standard.options.statement_timeout).toBe(11_000);
+      expect(standard.options.keepAlive).toBe(true);
+      const { rows } = await standard.query<{ statement_timeout: string }>("SHOW statement_timeout");
+      expect(rows[0]!.statement_timeout).toBe("11s");
+      expect(unlimited.options.query_timeout).toBeUndefined();
+      expect(unlimited.options.statement_timeout).toBeUndefined();
+    } finally {
+      await standard.end();
+      await unlimited.end();
+    }
+  });
+
+  it("consulta direta que passa do limite rejeita, a conexão não volta ao pool e a consulta seguinte funciona", async () => {
+    const pool = createPool(undefined, { queryTimeoutMs: SHORT_MS });
+    try {
+      const start = Date.now();
+      const failure = await pool.query("SELECT pg_sleep(30)").catch((error: unknown) => error);
+      expect(Date.now() - start).toBeLessThan(SHORT_MS + 1000);
+      expect(failure).toBeInstanceOf(Error);
+      expect(isQueryTimeoutError(failure)).toBe(true);
+      expect(isDbUnavailableError(failure)).toBe(true);
+      // A conexão foi destruída: não está ociosa nem conta mais no pool.
+      expect(pool.totalCount).toBe(0);
+      expect(pool.idleCount).toBe(0);
+
+      const again = await pool.query<{ ok: number }>("SELECT 1 AS ok");
+      expect(again.rows[0]!.ok).toBe(1);
+      // A consulta abandonada não continua rodando no servidor (`statement_timeout`).
+      await waitFor(async () => (await sleepingBackends()) === 0);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("consulta que passa do limite dentro de uma transação: rejeita em UM limite e a conexão é destruída", async () => {
+    const pool = createPool(undefined, { queryTimeoutMs: SHORT_MS });
+    try {
+      const start = Date.now();
+      const failure = await withTransaction(pool, async (client) => {
+        await client.query("SELECT 1");
+        await client.query("SELECT pg_sleep(30)");
+      }).catch((error: unknown) => error);
+      const elapsed = Date.now() - start;
+      expect(isQueryTimeoutError(failure)).toBe(true);
+      // Sem esperar um segundo limite pelo ROLLBACK (que ficaria na fila atrás da consulta pendurada).
+      expect(elapsed).toBeLessThan(2 * SHORT_MS - 50);
+      expect(pool.totalCount).toBe(0);
+
+      const again = await withTransaction(pool, async (client) => {
+        const { rows } = await client.query<{ ok: number }>("SELECT 1 AS ok");
+        return rows[0]!.ok;
+      });
+      expect(again).toBe(1);
+      await waitFor(async () => (await sleepingBackends()) === 0);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("erro que não é de tempo continua fazendo ROLLBACK e devolvendo a conexão ao pool", async () => {
+    const pool = createPool(undefined, { queryTimeoutMs: SHORT_MS });
+    try {
+      await expect(
+        withTransaction(pool, async (client) => {
+          await client.query("SELECT * FROM tabela_que_nao_existe");
+        }),
+      ).rejects.toThrow("tabela_que_nao_existe");
+      expect(pool.totalCount).toBe(1);
+      expect(pool.idleCount).toBe(1);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("espera por trava mais curta que o limite não estoura", async () => {
+    const pool = createPool(undefined, { queryTimeoutMs: SHORT_MS });
+    try {
+      // A trava é solta antes do limite; a consulta que esperava por ela termina normalmente.
+      const result = await withTableLocked("events", async () => {
+        const query = pool.query("SELECT count(*) FROM events");
+        await sleep(SHORT_MS / 3);
+        return { query };
+      });
+      expect((await result.query).rowCount).toBe(1);
+      expect(pool.totalCount).toBe(1);
+    } finally {
+      await pool.end();
+    }
+  });
+});
+
+describe("app com o banco sem responder", () => {
+  it("isDbReachable: true com o banco no ar; false, no prazo, com o banco fora ou pendurado", async () => {
+    expect(await isDbReachable(db)).toBe(true);
+
+    const dead = createPool(DEAD_URL);
+    try {
+      expect(await isDbReachable(dead)).toBe(false);
+    } finally {
+      await dead.end();
+    }
+
+    const start = Date.now();
+    expect(await isDbReachable(hangingDb(), 100)).toBe(false);
+    expect(Date.now() - start).toBeLessThan(1000);
+  });
+
+  it("/health responde 503 em cerca de 2 s quando o banco não responde", async () => {
+    const app = await buildApp({ db: hangingDb() });
+    try {
+      const start = Date.now();
+      const response = await app.inject({ method: "GET", url: "/health" });
+      const elapsed = Date.now() - start;
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toEqual({ status: "unavailable" });
+      expect(elapsed).toBeLessThan(2900); // o healthcheck do compose desiste em 3 s
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("consulta que estoura o limite: a página responde 503, a API 500 internal_error, e os dois são registrados", async () => {
+    const pool = createPool(undefined, { queryTimeoutMs: SHORT_MS });
+    const app = await buildApp({ db: pool, config: { ...config, partnerApiKey: "chave-de-teste" } });
+    try {
+      const [page, api] = await withTableLocked("events", () =>
+        Promise.all([
+          app.inject({ method: "GET", url: "/" }),
+          app.inject({ method: "GET", url: "/api/partner/events", headers: { "x-api-key": "chave-de-teste" } }),
+        ]),
+      );
+      expect(page.statusCode).toBe(503);
+      expect(page.headers["content-type"]).toContain("text/html");
+      expect(page.body).toContain("Serviço temporariamente indisponível");
+      expect(api.statusCode).toBe(500);
+      expect(api.body).toBe('{"error":"internal_error"}');
+
+      const calls = errorLog.mock.calls as unknown[][];
+      const logged = (prefix: string): boolean =>
+        calls.some((call) => String(call[0]).includes(prefix) && isQueryTimeoutError(call[1]));
+      expect(logged("Erro em GET / (resposta 503)")).toBe(true);
+      expect(logged("API de parceiros: erro em GET /api/partner/events")).toBe(true);
+
+      // As conexões penduradas foram destruídas; com a trava solta, tudo volta a responder.
+      expect(pool.totalCount).toBe(0);
+      expect((await app.inject({ method: "GET", url: "/" })).statusCode).toBe(200);
+      expect((await app.inject({ method: "GET", url: "/health" })).statusCode).toBe(200);
+    } finally {
+      await app.close();
+      await pool.end();
+    }
+  });
+});
+
+describe("worker do gateway com o banco sem responder", () => {
+  it("a rodada pendurada estoura o limite, é registrada, e a entrega sai quando o banco volta a responder", async () => {
+    const organizer = await createUser(db, { email: "org@teste.dev", password: "senha12345", role: "organizer" });
+    const event = await createTestEvent(db, organizer.id);
+    const result = await purchaseTicket(db, createSimulatedGateway(config.gateway), {
+      eventId: event.id,
+      cardNumber: "4000000000000001",
+      buyerEmail: "ana@teste.dev",
+      buyerUserId: null,
+      channel: "partner",
+    });
+    if (!result.ok) throw new Error(result.error);
+
+    const workerPool = createPool(undefined, { max: 4, queryTimeoutMs: SHORT_MS });
+    const lines = (): string[] => (errorLog.mock.calls as unknown[][]).map((call) => String(call[0]));
+    const worker = { current: null as { stop(): Promise<void> } | null };
+    try {
+      await withTableLocked("gateway_charges", async () => {
+        worker.current = startGatewayWorker(workerPool, { intervalMs: 10 });
+        await waitFor(() => lines().some((line) => line.includes("banco indisponível (Query read timeout)")));
+        expect((await getTicketById(db, result.ticket.id))!.status).toBe("pending");
+      });
+      await waitFor(async () => (await getTicketById(db, result.ticket.id))!.status === "confirmed");
+      await waitFor(() => lines().some((line) => line.includes("banco de volta")));
+    } finally {
+      await worker.current?.stop();
+      await workerPool.end();
+    }
   });
 });

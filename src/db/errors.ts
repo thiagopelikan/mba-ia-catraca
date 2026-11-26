@@ -16,8 +16,20 @@ const NETWORK_CODES = new Set([
  */
 const SERVER_CODES = new Set(["57P01", "57P02", "57P03", "53300"]);
 
-/** Mensagens do `pg` para conexão perdida ou não obtida (esses erros não têm código). */
+/** Mensagem do `pg` quando uma consulta passa do `query_timeout` (o erro não tem código). */
+const QUERY_TIMEOUT_MESSAGE = "Query read timeout";
+
+/**
+ * `true` se a consulta estourou o limite de tempo do cliente. A conexão fica em estado desconhecido (a consulta
+ * pode ainda estar rodando no servidor) e não pode voltar para o pool.
+ */
+export function isQueryTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.message === QUERY_TIMEOUT_MESSAGE;
+}
+
+/** Mensagens do `pg` para conexão perdida ou não obtida, ou banco que não respondeu (esses erros não têm código). */
 const PG_MESSAGES = [
+  QUERY_TIMEOUT_MESSAGE,
   "Connection terminated",
   "timeout exceeded when trying to connect",
   "Client has encountered a connection error and is not queryable",
@@ -25,7 +37,8 @@ const PG_MESSAGES = [
 ];
 
 /**
- * `true` se o erro é de conexão com o banco (banco parado, reiniciando ou inalcançável), e não da consulta em si.
+ * `true` se o erro é de conexão com o banco (banco parado, reiniciando, inalcançável ou que não respondeu no
+ * limite de tempo), e não da consulta em si.
  * Serve para responder 503 em vez de 500.
  */
 export function isDbUnavailableError(error: unknown): boolean {
