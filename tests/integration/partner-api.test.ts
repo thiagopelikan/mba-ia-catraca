@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { buildApp } from "../../src/app";
 import type { Db } from "../../src/db/pool";
 import { config } from "../../src/config";
+import { deliverDueCharges } from "../../src/gateway/worker";
 import { createUser } from "../helpers/auth";
 import { createTestDb, resetDb } from "../helpers/db";
 import { createTestEvent } from "../helpers/events";
@@ -177,5 +178,210 @@ describe("GET /api/partner/events", () => {
     const items = (await get("/api/partner/events")).json() as Array<{ id: string; availableSeats: number }>;
     expect(items.find((item) => item.id === event.id)!.availableSeats).toBe(4);
     expect(items.find((item) => item.id === full.id)!.availableSeats).toBe(0);
+  });
+});
+
+describe("POST /api/partner/events/:eventId/purchases", () => {
+  const INVALID_REQUEST = '{"error":"invalid_request"}';
+  const future = (): Date => new Date(Date.now() + 60 * 60 * 1000);
+
+  async function ticketCount(): Promise<number> {
+    const { rows } = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM tickets");
+    return rows[0]!.n;
+  }
+  async function availableSeats(eventId: string): Promise<number | undefined> {
+    const items = (await get("/api/partner/events")).json() as Array<{ id: string; availableSeats: number }>;
+    return items.find((item) => item.id === eventId)?.availableSeats;
+  }
+  /** Corpo cru, com o `Content-Type` dado (ou nenhum). */
+  function postRaw(eventId: string, payload: string | undefined, contentType?: string) {
+    const headers = contentType ? withKey({ "content-type": contentType }) : withKey();
+    return app.inject({ method: "POST", url: purchaseUrl(eventId), headers, payload });
+  }
+
+  it("sucesso → 202 com exatamente ticketId, code e status pending; ingresso do canal partner com cobrança agendada", async () => {
+    const event = await createTestEvent(db, organizerId, { capacity: 3, priceCents: 7500 });
+    const response = await post(purchaseUrl(event.id), { buyerEmail: "  parceiro@example.com ", cardNumber: "4000000000000003" });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.headers["content-type"]).toBe(JSON_TYPE);
+    const body = response.json() as { ticketId: string; code: string; status: string };
+    expect(Object.keys(body).sort()).toEqual(["code", "status", "ticketId"]);
+    expect(body.ticketId).toMatch(/^tkt_/);
+    expect(body.code).toMatch(/^[A-Z0-9]{8}$/);
+    expect(body.status).toBe("pending");
+
+    const { rows } = await db.query(
+      `SELECT t.code, t.event_id, t.channel, t.buyer_user_id, t.buyer_email, t.status, t.price_cents_paid,
+              gc.outcome, gc.delivered_at
+         FROM tickets t LEFT JOIN gateway_charges gc ON gc.ticket_id = t.id
+        WHERE t.id = $1`,
+      [body.ticketId],
+    );
+    expect(rows).toEqual([
+      {
+        code: body.code,
+        event_id: event.id,
+        channel: "partner",
+        buyer_user_id: null,
+        buyer_email: "parceiro@example.com",
+        status: "pending",
+        price_cents_paid: 7500,
+        outcome: "approved",
+        delivered_at: null,
+      },
+    ]);
+    expect(await availableSeats(event.id)).toBe(2);
+  });
+
+  it("campos extras no corpo são ignorados", async () => {
+    const event = await createTestEvent(db, organizerId);
+    const response = await post(purchaseUrl(event.id), { ...VALID_BODY, status: "confirmed", priceCents: 1, extra: [1] });
+    expect(response.statusCode).toBe(202);
+    expect(response.json().status).toBe("pending");
+    const { rows } = await db.query("SELECT status, price_cents_paid FROM tickets");
+    expect(rows).toEqual([{ status: "pending", price_cents_paid: 5000 }]);
+  });
+
+  const invalidObjects: Array<[string, unknown]> = [
+    ["sem buyerEmail", { cardNumber: "4000000000000001" }],
+    ["sem cardNumber", { buyerEmail: "a@example.com" }],
+    ["objeto vazio", {}],
+    ["buyerEmail que não é string", { buyerEmail: 42, cardNumber: "4000000000000001" }],
+    ["buyerEmail nulo", { buyerEmail: null, cardNumber: "4000000000000001" }],
+    ["buyerEmail vazio", { buyerEmail: "", cardNumber: "4000000000000001" }],
+    ["buyerEmail só com espaços", { buyerEmail: "   ", cardNumber: "4000000000000001" }],
+    ["buyerEmail sem arroba", { buyerEmail: "sem-arroba", cardNumber: "4000000000000001" }],
+    ["buyerEmail sem ponto no domínio", { buyerEmail: "a@example", cardNumber: "4000000000000001" }],
+    ["buyerEmail com espaço no meio", { buyerEmail: "a b@example.com", cardNumber: "4000000000000001" }],
+    ["buyerEmail com mais de 254 caracteres", { buyerEmail: `${"a".repeat(243)}@example.com`, cardNumber: "4000000000000001" }],
+    ["cardNumber curto", { buyerEmail: "a@example.com", cardNumber: "123" }],
+    ["cardNumber com 15 dígitos", { buyerEmail: "a@example.com", cardNumber: "400000000000001" }],
+    ["cardNumber com 17 dígitos", { buyerEmail: "a@example.com", cardNumber: "40000000000000011" }],
+    ["cardNumber com espaços", { buyerEmail: "a@example.com", cardNumber: "4000 0000 0000 0001" }],
+    ["cardNumber com letra", { buyerEmail: "a@example.com", cardNumber: "400000000000000a" }],
+    ["cardNumber numérico", { buyerEmail: "a@example.com", cardNumber: 4000000000000001 }],
+    ["cardNumber nulo", { buyerEmail: "a@example.com", cardNumber: null }],
+  ];
+  for (const [label, payload] of invalidObjects) {
+    it(`corpo inválido (${label}) → 422 invalid_request, sem criar ingresso`, async () => {
+      const event = await createTestEvent(db, organizerId);
+      const response = await post(purchaseUrl(event.id), payload);
+      expect(response.statusCode).toBe(422);
+      expect(response.body).toBe(INVALID_REQUEST);
+      expect(response.headers["content-type"]).toBe(JSON_TYPE);
+      expect(await ticketCount()).toBe(0);
+    });
+  }
+
+  const validJson = JSON.stringify(VALID_BODY);
+  const invalidRaw: Array<[string, string | undefined, string | undefined]> = [
+    ["JSON mal formado", "{isto não é json", "application/json"],
+    ["corpo ausente com Content-Type JSON", undefined, "application/json"],
+    ["corpo ausente sem Content-Type", undefined, undefined],
+    ["corpo que é array", `[${validJson}]`, "application/json"],
+    ["corpo que é string JSON", '"texto"', "application/json"],
+    ["corpo que é número", "42", "application/json"],
+    ["corpo null", "null", "application/json"],
+    ["JSON válido com Content-Type text/plain", validJson, "text/plain"],
+    ["JSON válido com Content-Type desconhecido", validJson, "application/xml"],
+    ["campos válidos em formulário", "buyerEmail=a%40example.com&cardNumber=4000000000000001", "application/x-www-form-urlencoded"],
+  ];
+  for (const [label, payload, contentType] of invalidRaw) {
+    it(`corpo inválido (${label}) → 422 invalid_request, sem criar ingresso`, async () => {
+      const event = await createTestEvent(db, organizerId);
+      const response = await postRaw(event.id, payload, contentType);
+      expect(response.statusCode).toBe(422);
+      expect(response.body).toBe(INVALID_REQUEST);
+      expect(response.headers["content-type"]).toBe(JSON_TYPE);
+      expect(await ticketCount()).toBe(0);
+    });
+  }
+
+  it("Content-Type application/json com charset é aceito", async () => {
+    const event = await createTestEvent(db, organizerId);
+    const response = await postRaw(event.id, validJson, "application/json; charset=utf-8");
+    expect(response.statusCode).toBe(202);
+  });
+
+  it("ordem: corpo inválido em evento inexistente, rascunho ou lotado → 422 (o corpo vem antes do evento e da vaga)", async () => {
+    const draft = await createTestEvent(db, organizerId, { status: "draft" });
+    const full = await createTestEvent(db, organizerId, { capacity: 1 });
+    await createTestTicket(db, full.id, { status: "pending" });
+    const before = await ticketCount();
+
+    for (const eventId of ["evt_naoexiste", draft.id, full.id]) {
+      const response = await post(purchaseUrl(eventId), { buyerEmail: "a@example.com", cardNumber: "123" });
+      expect(response.statusCode, eventId).toBe(422);
+      expect(response.body).toBe(INVALID_REQUEST);
+    }
+    expect(await ticketCount()).toBe(before);
+  });
+
+  it("evento inexistente, rascunho ou cancelado → 404 event_not_available, sem criar ingresso", async () => {
+    const draft = await createTestEvent(db, organizerId, { status: "draft" });
+    const cancelled = await createTestEvent(db, organizerId, { status: "cancelled" });
+
+    for (const eventId of ["evt_naoexiste", "evt_000000000000", "qualquer-coisa", draft.id, cancelled.id]) {
+      const response = await post(purchaseUrl(eventId), VALID_BODY);
+      expect(response.statusCode, eventId).toBe(404);
+      expect(response.body).toBe('{"error":"event_not_available"}');
+      expect(response.headers["content-type"]).toBe(JSON_TYPE);
+    }
+    expect(await ticketCount()).toBe(0);
+  });
+
+  it("evento lotado → 409 sold_out, sem criar ingresso", async () => {
+    const event = await createTestEvent(db, organizerId, { capacity: 2 });
+    await createTestTicket(db, event.id, { status: "confirmed", channel: "storefront" });
+    expect((await post(purchaseUrl(event.id), VALID_BODY)).statusCode).toBe(202);
+
+    const response = await post(purchaseUrl(event.id), VALID_BODY);
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toBe('{"error":"sold_out"}');
+    expect(response.headers["content-type"]).toBe(JSON_TYPE);
+    expect(await ticketCount()).toBe(2);
+    expect(await availableSeats(event.id)).toBe(0);
+  });
+
+  it("a recusa do gateway devolve a vaga na listagem e permite nova compra", async () => {
+    const event = await createTestEvent(db, organizerId, { capacity: 1 });
+    const declined = await post(purchaseUrl(event.id), { buyerEmail: "a@example.com", cardNumber: "4000000000000004" });
+    expect(declined.statusCode).toBe(202);
+    expect(await availableSeats(event.id)).toBe(0);
+    expect((await post(purchaseUrl(event.id), VALID_BODY)).statusCode).toBe(409);
+
+    await deliverDueCharges(db, future());
+    expect(await availableSeats(event.id)).toBe(1);
+    const { rows } = await db.query("SELECT status FROM tickets WHERE id = $1", [declined.json().ticketId]);
+    expect(rows).toEqual([{ status: "declined" }]);
+
+    const approved = await post(purchaseUrl(event.id), VALID_BODY);
+    expect(approved.statusCode).toBe(202);
+    await deliverDueCharges(db, future());
+    const { rows: after } = await db.query("SELECT status FROM tickets WHERE id = $1", [approved.json().ticketId]);
+    expect(after).toEqual([{ status: "confirmed" }]);
+    expect(await availableSeats(event.id)).toBe(0);
+  });
+
+  it("erro inesperado → 500 internal_error em JSON, sem ingresso", async () => {
+    const event = await createTestEvent(db, organizerId);
+    const failing = await buildApp({
+      db,
+      config: { ...config, partnerApiKey: KEY },
+      gateway: {
+        async charge() {
+          throw new Error("gateway fora do ar (erro proposital do teste)");
+        },
+      },
+    });
+    try {
+      const response = await failing.inject({ method: "POST", url: purchaseUrl(event.id), headers: withKey(), payload: VALID_BODY });
+      expect(response.statusCode).toBe(500);
+      expect(response.body).toBe('{"error":"internal_error"}');
+      expect(await ticketCount()).toBe(0);
+    } finally {
+      await failing.close();
+    }
   });
 });
