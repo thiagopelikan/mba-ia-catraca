@@ -24,6 +24,15 @@ function isJsonContentType(header: string | undefined): boolean {
   return header?.split(";")[0]!.trim().toLowerCase() === "application/json";
 }
 
+/** Caracteres de controle (C0, DEL e C1, inclusive o byte NUL, que o Postgres não aceita em texto). */
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return true;
+  }
+  return false;
+}
+
 /** Corpo da compra: `{ buyerEmail, cardNumber }`, ambos strings. `null` = `invalid_request`. */
 function parsePurchaseBody(body: unknown): { buyerEmail: string; cardNumber: string } | null {
   if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
@@ -31,18 +40,21 @@ function parsePurchaseBody(body: unknown): { buyerEmail: string; cardNumber: str
 
   if (typeof buyerEmail !== "string") return null;
   const email = buyerEmail.trim();
-  if (email.length > EMAIL_MAX || !EMAIL_PATTERN.test(email)) return null;
+  if (email.length > EMAIL_MAX || !EMAIL_PATTERN.test(email) || hasControlChar(email)) return null;
 
   // Um número JSON não é aceito: o cartão tem de ser uma string com exatamente 16 dígitos.
   if (typeof cardNumber !== "string" || !isValidCardNumber(cardNumber)) return null;
   return { buyerEmail: email, cardNumber };
 }
 
-/** Erros de leitura do corpo (JSON mal formado, corpo vazio, tipo de mídia não aceito) chegam com 400 ou 415. */
+/**
+ * Erros de leitura do corpo chegam com status 4xx: JSON mal formado ou corpo vazio (400), corpo acima do limite
+ * (413), tipo de mídia não aceito (415). Qualquer um deles é corpo inválido.
+ */
 function isBodyParsingError(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
   const { statusCode } = error as { statusCode?: unknown };
-  return statusCode === 400 || statusCode === 415;
+  return typeof statusCode === "number" && statusCode >= 400 && statusCode < 500;
 }
 
 /**

@@ -458,3 +458,142 @@ describe("GET /api/partner/tickets/:ticketId", () => {
     }
   });
 });
+
+describe("casos de borda: nenhuma resposta fora do formato da API nem antes da autenticação", () => {
+  const INVALID_REQUEST = '{"error":"invalid_request"}';
+  const EVENT_NOT_AVAILABLE = '{"error":"event_not_available"}';
+  const TICKET_NOT_FOUND = '{"error":"ticket_not_found"}';
+  const BAD_URL = "%E0%A4%A";
+  const LONG_ID = "a".repeat(5000);
+
+  async function ticketCount(): Promise<number> {
+    const { rows } = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM tickets");
+    return rows[0]!.n;
+  }
+  function postJson(eventId: string, payload: string, headers: Headers = withKey()) {
+    return app.inject({
+      method: "POST",
+      url: purchaseUrl(eventId),
+      headers: { "content-type": "application/json", ...headers },
+      payload,
+    });
+  }
+  const big = (fields: object): string => JSON.stringify({ ...fields, pad: "x".repeat(2 * 1024 * 1024) });
+
+  it("corpo de compra acima do limite → 422 invalid_request (com ou sem campos válidos, em qualquer evento)", async () => {
+    const event = await createTestEvent(db, organizerId);
+    const full = await createTestEvent(db, organizerId, { capacity: 1 });
+    await createTestTicket(db, full.id, { status: "pending" });
+
+    for (const [eventId, payload] of [
+      [event.id, big(VALID_BODY)],
+      [event.id, big({ buyerEmail: "a@example.com" })],
+      ["evt_naoexiste", big(VALID_BODY)],
+      [full.id, big(VALID_BODY)],
+    ] as const) {
+      const response = await postJson(eventId, payload);
+      expect(response.statusCode, eventId).toBe(422);
+      expect(response.body).toBe(INVALID_REQUEST);
+      expect(response.headers["content-type"]).toBe(JSON_TYPE);
+    }
+    expect(await ticketCount()).toBe(1);
+
+    const noKey = await postJson(event.id, big(VALID_BODY), {});
+    expect(noKey.statusCode).toBe(401);
+    expect(noKey.body).toBe(UNAUTHORIZED);
+  });
+
+  const controlChars: Array<[string, string]> = [
+    ["NUL", "\u0000"],
+    ["U+0001", "\u0001"],
+    ["ESC", "\u001b"],
+    ["DEL", "\u007f"],
+    ["U+0085", "\u0085"],
+  ];
+  for (const [label, char] of controlChars) {
+    it(`buyerEmail com caractere de controle (${label}) → 422 invalid_request, sem criar ingresso`, async () => {
+      const event = await createTestEvent(db, organizerId);
+      for (const buyerEmail of [`a${char}b@example.com`, `a@exam${char}ple.com`, `${char}a@example.com`, `a@example.com${char}`]) {
+        const response = await post(purchaseUrl(event.id), { buyerEmail, cardNumber: "4000000000000001" });
+        expect(response.statusCode, JSON.stringify(buyerEmail)).toBe(422);
+        expect(response.body).toBe(INVALID_REQUEST);
+      }
+      expect(await ticketCount()).toBe(0);
+    });
+  }
+
+  it("ticketId com byte NUL ou fora do formato de ID → 404 ticket_not_found", async () => {
+    for (const ticketId of ["%00", "tkt_%00x", "tkt_%00%00%00%00%00%00%00%00%00%00%00%00", "tkt_ABCDEFGHIJKL", "tkt_abc"]) {
+      const response = await get(`/api/partner/tickets/${ticketId}`);
+      expect(response.statusCode, ticketId).toBe(404);
+      expect(response.body).toBe(TICKET_NOT_FOUND);
+      expect(response.headers["content-type"]).toBe(JSON_TYPE);
+    }
+  });
+
+  it("eventId com byte NUL e corpo válido → 404 event_not_available; com corpo inválido → 422", async () => {
+    for (const eventId of ["%00", "evt_%00x", "evt_%00%00%00%00%00%00%00%00%00%00%00%00"]) {
+      const response = await post(purchaseUrl(eventId), VALID_BODY);
+      expect(response.statusCode, eventId).toBe(404);
+      expect(response.body).toBe(EVENT_NOT_AVAILABLE);
+      expect(response.headers["content-type"]).toBe(JSON_TYPE);
+
+      const invalid = await post(purchaseUrl(eventId), { buyerEmail: "a@example.com", cardNumber: "123" });
+      expect(invalid.statusCode, eventId).toBe(422);
+    }
+    expect(await ticketCount()).toBe(0);
+  });
+
+  const badPaths: Array<[string, "GET" | "POST", string, string]> = [
+    ["ticket com URL malformada", "GET", `/api/partner/tickets/${BAD_URL}`, TICKET_NOT_FOUND],
+    ["ticket com ID de 5000 caracteres", "GET", `/api/partner/tickets/${LONG_ID}`, TICKET_NOT_FOUND],
+    ["compra com URL malformada", "POST", purchaseUrl(BAD_URL), EVENT_NOT_AVAILABLE],
+    ["compra com ID de 5000 caracteres", "POST", purchaseUrl(LONG_ID), EVENT_NOT_AVAILABLE],
+    ["caminho desconhecido com URL malformada", "GET", `/api/partner/outra/${BAD_URL}`, '{"error":"not_found"}'],
+    ["listagem com URL malformada", "GET", `/api/partner/events/${BAD_URL}`, '{"error":"not_found"}'],
+    ["prefixo codificado com URL malformada", "GET", `/api/%70artner/tickets/${BAD_URL}`, TICKET_NOT_FOUND],
+  ];
+  for (const [label, method, url, expected] of badPaths) {
+    it(`${label}: sem chave ou com chave errada → 401; com chave → 404 no formato da API`, async () => {
+      const payload = method === "POST" ? VALID_BODY : undefined;
+      for (const headers of [{}, { "x-api-key": "chave-errada" }, { "x-api-key": "" }] as Headers[]) {
+        const response = await app.inject({ method, url, headers, payload });
+        expect(response.statusCode).toBe(401);
+        expect(response.body).toBe(UNAUTHORIZED);
+        expect(response.headers["content-type"]).toBe(JSON_TYPE);
+      }
+      const response = await app.inject({ method, url, headers: withKey(), payload });
+      expect(response.statusCode).toBe(404);
+      expect(response.body).toBe(expected);
+      expect(response.headers["content-type"]).toBe(JSON_TYPE);
+      expect(await ticketCount()).toBe(0);
+    });
+  }
+
+  it("fora de /api/partner, URL malformada e parâmetro longo continuam com a resposta padrão do Fastify", async () => {
+    const bad = await app.inject({ method: "GET", url: `/eventos/${BAD_URL}`, headers: withKey() });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.headers["content-type"]).toBe("application/json");
+    expect(bad.json()).toEqual({
+      error: "Bad Request",
+      code: "FST_ERR_BAD_URL",
+      message: `'/eventos/${BAD_URL}' is not a valid url component`,
+      statusCode: 400,
+    });
+
+    const long = await app.inject({ method: "GET", url: `/eventos/${LONG_ID}` });
+    expect(long.statusCode).toBe(414);
+    expect(long.headers["content-type"]).toBe("application/json");
+    expect(long.json()).toEqual({
+      error: "Bad Request",
+      code: "FST_ERR_MAX_PARAM_LENGTH",
+      message: `'/eventos/${LONG_ID}' is exceeding the max param length`,
+      statusCode: 414,
+    });
+
+    // Um caminho que só começa parecido com o da API não é da API.
+    const lookalike = await app.inject({ method: "GET", url: `/api/partnerx/${BAD_URL}` });
+    expect(lookalike.statusCode).toBe(400);
+    expect(lookalike.json().code).toBe("FST_ERR_BAD_URL");
+  });
+});
