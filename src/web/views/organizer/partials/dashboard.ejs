@@ -1,1 +1,20 @@
-<%# F07 (painel): seção preenchida pela F07. Recebe `event` e `data`. %>
+<%# F07 (painel): seção preenchida pela F07. Recebe `event` e `data` (`data.dashboard`, `data.revenueLabel`). %>
+<% if (data.dashboard) { %>
+<section id="painel">
+  <h2>Painel</h2>
+  <dl>
+    <dt>Confirmados</dt>
+    <dd data-dashboard="confirmed"><%= data.dashboard.confirmed %></dd>
+    <dt>Pendentes</dt>
+    <dd data-dashboard="pending"><%= data.dashboard.pending %></dd>
+    <dt>Check-ins</dt>
+    <dd data-dashboard="checkIns"><%= data.dashboard.checkIns %></dd>
+    <dt>Vagas disponíveis</dt>
+    <dd data-dashboard="availableSeats"><%= data.dashboard.availableSeats %></dd>
+    <dt>Receita</dt>
+    <dd data-dashboard="revenue"><%= data.revenueLabel %></dd>
+    <dt>Estornados</dt>
+    <dd data-dashboard="refunded"><%= data.dashboard.refunded %></dd>
+  </dl>
+</section>
+<% } %>

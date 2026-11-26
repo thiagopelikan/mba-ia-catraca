@@ -396,20 +396,26 @@ describe("pontos de extensão da página de gestão", () => {
     return { custom, captured, cookie };
   }
 
-  it("managementSections começa vazio e as seções sem loader recebem {}", async () => {
+  it("managementSections só tem o loader do painel (F07) e as seções sem loader recebem {}", async () => {
     const { custom, captured, cookie } = await appCapturingViewData();
     expect(custom.managementSections).toBeInstanceOf(Map);
-    expect(custom.managementSections.size).toBe(0);
+    // A F07 registra o loader `dashboard` em `buildApp`; check-in e cancelamento não têm loader.
+    expect([...custom.managementSections.keys()]).toEqual(["dashboard"]);
     const event = await createTestEvent(db, orgAId);
     const response = await custom.inject({ method: "GET", url: `/organizador/eventos/${event.id}`, headers: { cookie } });
     expect(response.statusCode).toBe(200);
-    expect(captured[0]!.sections).toEqual({ dashboard: {}, checkin: {}, cancel: {} });
+    const sections = captured[0]!.sections as Record<string, Record<string, unknown>>;
+    expect(Object.keys(sections)).toEqual(["dashboard", "checkin", "cancel"]);
+    expect(sections.checkin).toEqual({});
+    expect(sections.cancel).toEqual({});
     await custom.close();
   });
 
   it("o loader registrado recebe o evento e seus dados chegam à seção; options.sections tem precedência", async () => {
     const { renderManagementPage, loadOwnedEvent } = await import("../../src/web/organizer/management-page");
     const { custom, captured, cookie } = await appCapturingViewData((instance) => {
+      // Sem o loader do painel (F07), para olhar só o mecanismo: seção sem loader recebe {}.
+      instance.managementSections.delete("dashboard");
       // Rota de teste no papel de uma feature seguinte que responde a um POST com a página atualizada.
       instance.get("/teste-secoes/:id", async (request, reply) => {
         const owned = await loadOwnedEvent(request, reply);
