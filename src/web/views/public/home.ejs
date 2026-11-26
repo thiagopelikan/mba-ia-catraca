@@ -1,4 +1,20 @@
 <%- include('../partials/head', { title }) %>
 <h1>Eventos</h1>
+<% if (events.length === 0) { %>
 <p>Nenhum evento à venda no momento.</p>
+<% } else { %>
+<table>
+  <thead><tr><th>Evento</th><th>Data</th><th>Local</th><th>Preço</th></tr></thead>
+  <tbody>
+  <% for (const event of events) { %>
+    <tr>
+      <td><a href="/eventos/<%= event.id %>"><%= event.name %></a></td>
+      <td><%= event.startsAtLabel %></td>
+      <td><%= event.venue %></td>
+      <td><%= event.priceLabel %></td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+<% } %>
 <%- include('../partials/foot') %>
