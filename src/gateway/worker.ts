@@ -97,6 +97,7 @@ export function startGatewayWorker(
         const seconds = Math.round((Date.now() - outageSince) / 1000);
         console.error(`Worker do gateway: banco de volta depois de ${seconds} s; entregas retomadas`);
         outageSince = null;
+        lastOutageLog = 0; // a próxima queda é registrada na hora
       }
     } catch (error) {
       if (!isDbUnavailableError(error)) {
