@@ -35,7 +35,7 @@
       "name": "Compra e ingressos",
       "dir": "docs/features/F03-compra-e-ingressos",
       "wave": "W3",
-      "status": "pending",
+      "status": "specified",
       "pr": null,
       "latestEvaluation": null
     },
