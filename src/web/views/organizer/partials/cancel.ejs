@@ -1,1 +1,14 @@
-<%# F06 (cancelamento): seção preenchida pela F06. Recebe `event` e `data`. %>
+<%# F06 (cancelamento). Recebe `event` e `data`. Rascunho não mostra nada. %>
+<% if (event.status === 'published') { %>
+<section id="cancelar">
+  <h2>Cancelar evento</h2>
+  <p>O cancelamento é irreversível: o evento sai da vitrine, os ingressos confirmados são estornados e os pendentes são cancelados.</p>
+  <form method="post" action="/organizador/eventos/<%= event.id %>/cancelar">
+    <button type="submit">Cancelar evento</button>
+  </form>
+</section>
+<% } else if (event.status === 'cancelled') { %>
+<section id="cancelar">
+  <p>Este evento foi cancelado.</p>
+</section>
+<% } %>

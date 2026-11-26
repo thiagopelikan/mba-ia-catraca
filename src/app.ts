@@ -13,6 +13,7 @@ import { partnerApiFrameworkErrors } from "./partner-api/framework-errors";
 import { registerPartnerApiRoutes } from "./partner-api/routes";
 import { registerAuth } from "./web/auth/plugin";
 import { registerAuthRoutes } from "./web/auth/routes";
+import { registerOrganizerCancelRoutes } from "./web/organizer/cancel-routes";
 import { registerCheckinRoutes } from "./web/organizer/checkin-routes";
 import { registerOrganizerEventRoutes } from "./web/organizer/event-routes";
 import { registerOrganizerRoutes } from "./web/organizer/routes";
@@ -70,6 +71,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await registerParticipantRoutes(app);
   await registerPartnerApiRoutes(app);
   await registerCheckinRoutes(app);
+  await registerOrganizerCancelRoutes(app);
 
   return app;
 }
