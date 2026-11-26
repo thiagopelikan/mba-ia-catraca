@@ -9,6 +9,7 @@ import { config as defaultConfig, type Config } from "./config";
 import type { Db } from "./db/pool";
 import type { PaymentGateway } from "./gateway/gateway";
 import { createSimulatedGateway } from "./gateway/simulated";
+import { registerPartnerApiRoutes } from "./partner-api/routes";
 import { registerAuth } from "./web/auth/plugin";
 import { registerAuthRoutes } from "./web/auth/routes";
 import { registerOrganizerEventRoutes } from "./web/organizer/event-routes";
@@ -64,6 +65,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await registerOrganizerRoutes(app);
   await registerOrganizerEventRoutes(app);
   await registerParticipantRoutes(app);
+  await registerPartnerApiRoutes(app);
 
   return app;
 }
